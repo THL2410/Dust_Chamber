@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-export type UserRole = "candidate" | "employer" | "admin";
+export type UserRole = "user" | "admin";
 
 @Entity("users")
 export class User {
@@ -25,7 +25,7 @@ export class User {
   @Column({ type: "varchar", length: 20, nullable: true })
   phone: string | null;
 
-  @Column({ type: "varchar", length: 20, default: "candidate" })
+  @Column({ type: "varchar", length: 20, default: "user" })
   role: UserRole;
 
   @Column({ name: "is_active", default: true })

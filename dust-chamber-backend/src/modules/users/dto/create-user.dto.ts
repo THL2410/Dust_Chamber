@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsEmail,
-  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -51,15 +50,4 @@ export class CreateUserDto {
   @IsOptional()
   @Matches(/^(0|\+84)\d{9}$/, { message: "Số điện thoại không hợp lệ" })
   phone?: string;
-
-  @ApiPropertyOptional({
-    enum: ["candidate", "employer"],
-    default: "candidate",
-    description: "Vai trò. Admin không tạo qua API này.",
-  })
-  @IsOptional()
-  @IsIn(["candidate", "employer"], {
-    message: "Vai trò chỉ được là candidate hoặc employer",
-  })
-  role?: "candidate" | "employer";
 }

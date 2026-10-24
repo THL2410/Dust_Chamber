@@ -1,122 +1,49 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import HistoryPage from './components/History/HistoryPage';
+import UserManagementPage from './components/UserManager/UserManagementPage.tsx';
+import './index.css';
+
+// Component Menu điều hướng (Navbar)
+const Navbar = () => {
+    const location = useLocation(); // Lấy đường dẫn hiện tại để bôi màu menu đang chọn
+
+    // Hàm phụ trợ để đổi màu nút menu
+    const getNavClass = (path: string) => {
+        return location.pathname === path
+            ? "bg-blue-600 text-white px-4 py-2 rounded-md font-medium"
+            : "text-gray-300 hover:bg-blue-500 hover:text-white px-4 py-2 rounded-md font-medium transition";
+    };
+
+    return (
+        <nav className="bg-gray-800 p-4 shadow-md">
+
+            <div className="max-w-7xl mx-auto flex gap-4">
+                {/* Các liên kết điều hướng */}
+                <Link to="/history" className={getNavClass('/history')}>Lịch sử</Link>
+                <Link to="/users" className={getNavClass('/users')}>Quản lý User</Link>
+                <Link to="/login" className={getNavClass('/login')}>Đăng xuất</Link>
+            </div>
+        </nav>
+    );
+};
 
 function App() {
-  const [count, setCount] = useState(0)
+    return (
+        <BrowserRouter>
+            <div className="min-h-screen bg-gray-100">
+                {/* Thanh Navbar sẽ luôn hiển thị ở mọi trang */}
+                <Navbar />
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+                {/* Nội dung bên dưới Navbar sẽ thay đổi tùy theo URL */}
+                <div className="p-4">
+                    <Routes>
+                        <Route path="/history" element={<HistoryPage />} />
+                        <Route path="/users" element={<UserManagementPage />} />
+                    </Routes>
+                </div>
+            </div>
+        </BrowserRouter>
+    );
 }
 
-export default App
+export default App;

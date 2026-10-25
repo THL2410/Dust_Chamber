@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import HistoryPage from './components/History/HistoryPage';
 import UserManagementPage from './components/UserManager/UserManagementPage.tsx';
+import CalculationPage from './components/Calculation/CalculationPage';
 import './index.css';
 
 // Component Menu điều hướng (Navbar)
@@ -17,8 +18,9 @@ const Navbar = () => {
     return (
         <nav className="bg-gray-800 p-4 shadow-md">
 
-            <div className="max-w-7xl mx-auto flex gap-4">
+            <div className="max-w-7xl mx-auto flex flex-wrap gap-4">
                 {/* Các liên kết điều hướng */}
+                <Link to="/calculate" className={getNavClass('/calculate')}>Tính toán</Link>
                 <Link to="/history" className={getNavClass('/history')}>Lịch sử</Link>
                 <Link to="/users" className={getNavClass('/users')}>Quản lý User</Link>
                 <Link to="/login" className={getNavClass('/login')}>Đăng xuất</Link>
@@ -37,6 +39,8 @@ function App() {
                 {/* Nội dung bên dưới Navbar sẽ thay đổi tùy theo URL */}
                 <div className="p-4">
                     <Routes>
+                        <Route path="/" element={<Navigate to="/calculate" replace />} />
+                        <Route path="/calculate" element={<CalculationPage />} />
                         <Route path="/history" element={<HistoryPage />} />
                         <Route path="/users" element={<UserManagementPage />} />
                     </Routes>

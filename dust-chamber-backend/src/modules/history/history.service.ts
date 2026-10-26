@@ -1,293 +1,263 @@
-﻿
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, Repository } from "typeorm";
-
-import { DesignSummary } from "./entities/design-summary.entity";
-import { HistoryQueryDto } from "./dto/history-query.dto";
+import { DataSource, EntityManager, QueryFailedError, Repository } from "typeorm";
 import { CreateHistoryDto } from "./dto/create-history.dto";
+import { HistoryQueryDto } from "./dto/history-query.dto";
+import { DesignResult } from "./entities/design-result.entity";
 
-// Các cột của design_inputs trong init.sql
-const INPUT_COLUMNS = [
-  "flow_rate_m3_h","temperature_c","dust_concentration_g_m3",
-  "dust_density_kg_m3","d_min_target_um","chamber_height_m","chamber_length_m","chamber_width_m",
-  "gas_velocity_m_s","operating_hours_per_day","pipe_velocity_m_s","pipe_diameter_m","pipe_length_m",
-  "friction_r_pa_m","roughness_beta","local_resistance_sum","chamber_pressure_drop_pa","fan_efficiency",
+// Whitelist tên cột thật trong init.sql: tuyệt đối không nhận tên bảng/cột tùy ý từ request.
+const INPUT = [
+  "flow_rate_m3_h", "temperature_c", "dust_concentration_g_m3", "dust_density_kg_m3",
+  "d_min_target_um", "chamber_height_m", "chamber_length_m", "chamber_width_m",
+  "gas_velocity_m_s", "operating_hours_per_day", "pipe_velocity_m_s", "pipe_diameter_m",
+  "pipe_length_m", "friction_r_pa_m", "roughness_beta", "local_resistance_sum",
+  "chamber_pressure_drop_pa", "fan_efficiency",
 ] as const;
-
-// Các cột bắt buộc của design_inputs
-const REQUIRED_INPUT_COLUMNS = [
-  "flow_rate_m3_h",
-  "temperature_c",
-  "dust_concentration_g_m3",
-  "dust_density_kg_m3",
+const INPUT_REQUIRED = [
+  "flow_rate_m3_h", "temperature_c", "dust_concentration_g_m3", "dust_density_kg_m3",
 ];
-
-// Các cột của design_results trong init.sql
-const RESULT_COLUMNS = ["h_m","l_m",
-  "b_m","mu_pa_s","rho_gas_kg_m3","u_m_s","tau1_s","tau2_s","l_min_m","bl_m2","d_min_calc_um",
-  "d_limit_um","is_retained","gv_kg_h","yv_percent","gs_kg_h","qs_m3_h","gb_kg_h","m1_kg_h",
-  "m2_kg_h","mt_kg_h","mn_kg_day","mr_kg_h","cb_out_mg_m3","eta_total_percent","d0_m","vt_m_s","alpha",
-  "dp_friction_pa","p_dynamic_pa","p_local_pa","dp_pipe_pa","dp_system_pa","fan_power_kw",
+const INPUT_NULLABLE = [
+  "d_min_target_um", "chamber_height_m", "chamber_length_m", "chamber_width_m", "pipe_diameter_m",
+];
+const INPUT_POSITIVE = [
+  "flow_rate_m3_h", "dust_density_kg_m3", "d_min_target_um", "chamber_height_m",
+  "chamber_length_m", "chamber_width_m", "gas_velocity_m_s", "pipe_velocity_m_s", "pipe_diameter_m",
+];
+const INPUT_NONNEGATIVE = [
+  "dust_concentration_g_m3", "pipe_length_m", "friction_r_pa_m", "roughness_beta",
+  "local_resistance_sum", "chamber_pressure_drop_pa",
+];
+const RESULT = [
+  "h_m", "l_m", "b_m", "mu_pa_s", "rho_gas_kg_m3", "u_m_s", "tau1_s", "tau2_s",
+  "l_min_m", "bl_m2", "d_min_calc_um", "d_limit_um", "is_retained", "gv_kg_h",
+  "yv_percent", "gs_kg_h", "qs_m3_h", "gb_kg_h", "m1_kg_h", "m2_kg_h",
+  "mt_kg_h", "mn_kg_day", "mr_kg_h", "cb_out_mg_m3", "eta_total_percent", "d0_m",
+  "vt_m_s", "alpha", "dp_friction_pa", "p_dynamic_pa", "p_local_pa", "dp_pipe_pa",
+  "dp_system_pa", "fan_power_kw",
 ] as const;
+const FRACTION_RESULT = [
+  "d_rep_um", "settling_velocity_m_s", "efficiency_percent",
+  "inlet_conc_g_m3", "outlet_conc_g_m3", "regime",
+] as const;
+
+type Row = Record<string, unknown>;
 
 @Injectable()
 export class HistoryService {
   constructor(
-    @InjectRepository(DesignSummary)
-    private readonly historyRepository:
-      Repository<DesignSummary>,
-
-    private readonly dataSource: DataSource,
+    @InjectRepository(DesignResult)
+    private readonly results: Repository<DesignResult>,
+    private readonly db: DataSource,
   ) {}
 
-  // GET /api/history
-  async findAll(query: HistoryQueryDto) {
-    const {
-      page,
-      limit,
-      search,
-      sortBy,
-      order,
-    } = query;
-
-    const qb = this.historyRepository
-      .createQueryBuilder("history");
-
-    if (search?.trim()) {
-      qb.andWhere(
-        "history.name ILIKE :search",
-        {
-          search: `%${search.trim()}%`,
-        },
-      );
+  // GET /api/history — dùng view SQL có sẵn; giữ JSON camelCase tương thích frontend.
+  async findAll(q: HistoryQueryDto) {
+    if (q.fromDate && q.toDate && q.fromDate > q.toDate) {
+      throw new BadRequestException("fromDate phải nhỏ hơn hoặc bằng toDate");
     }
-
-    qb.orderBy(`history.${sortBy}`, order)
-      .addOrderBy("history.id", "DESC")
-      .skip((page - 1) * limit)
-      .take(limit);
-
-    const [data, total] = await qb.getManyAndCount();
-
-    return {
-      data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    const filter = (sql: string, value: unknown) => {
+      values.push(value);
+      conditions.push(`${sql} $${values.length}`);
     };
+
+    if (q.search?.trim()) filter("name ILIKE", `%${q.search.trim()}%`);
+    if (q.mode) filter("mode =", q.mode);
+    // Quy ước ngày tại Việt Nam (+07:00), khoảng [từ đầu ngày, trước đầu ngày tiếp theo].
+    if (q.fromDate) filter("created_at >=", new Date(`${q.fromDate}T00:00:00+07:00`));
+    if (q.toDate) {
+      filter("created_at <", new Date(Date.parse(`${q.toDate}T00:00:00+07:00`) + 86400000));
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const sort = {
+      createdAt: "created_at", name: "name", etaTotalPercent: "eta_total_percent",
+    }[q.sortBy] ?? "created_at";
+    const direction = q.order === "ASC" ? "ASC" : "DESC";
+
+    const [count]: Array<{ total: number }> = await this.db.query(
+      `SELECT COUNT(*)::int AS total FROM v_design_summary ${where}`, values,
+    );
+    const data = await this.db.query(
+      `SELECT id, name, mode, created_at AS "createdAt",
+         flow_rate_m3_h AS "flowRateM3H", temperature_c AS "temperatureC",
+         dust_concentration_g_m3 AS "dustConcentrationGM3",
+         h_m AS "hM", l_m AS "lM", b_m AS "bM",
+         d_min_calc_um AS "dMinCalcUm", is_retained AS "isRetained",
+         eta_total_percent AS "etaTotalPercent", cb_out_mg_m3 AS "cbOutMgM3",
+         fan_power_kw AS "fanPowerKw"
+       FROM v_design_summary ${where}
+       ORDER BY ${sort} ${direction}, id DESC
+       LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, q.limit, (q.page - 1) * q.limit],
+    );
+    const total = count?.total ?? 0;
+    return { data, meta: {
+      page: q.page, limit: q.limit, total, totalPages: Math.ceil(total / q.limit),
+    } };
   }
 
-  // Kiểm tra dữ liệu trước khi INSERT.
-  // Tên cột được giới hạn theo danh sách cố định.
-  private validateData(
-    data: Record<string, unknown>,
-    allowed: readonly string[],
-    required: readonly string[],
-    booleanColumn?: string,
-  ) {
-    const unknownFields = Object.keys(data).filter(
-      (key) => !allowed.includes(key),
-    );
-
-    if (unknownFields.length > 0) {
-      throw new BadRequestException(
-        `Trường không hợp lệ: ${unknownFields.join(", ")}`,
-      );
+  // Kiểm tra key và kiểu dữ liệu trước khi INSERT, tránh DB trả lỗi 500 khó hiểu.
+  private check(
+    obj: unknown, allowed: readonly string[], required: readonly string[],
+    nullable: readonly string[] = [], booleanKeys: readonly string[] = [], stringKeys: readonly string[] = [],
+  ): Row {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+      throw new BadRequestException("Dữ liệu phải là object");
     }
-
-    for (const column of required) {
-      if (data[column] === null ||
-          data[column] === undefined) {
-        throw new BadRequestException(
-          `Thiếu trường bắt buộc: ${column}`,
-        );
+    const data = obj as Row;
+    for (const key of Object.keys(data)) {
+      if (!allowed.includes(key)) throw new BadRequestException(`Trường không hợp lệ: ${key}`);
+      const value = data[key];
+      if (value === null && nullable.includes(key)) continue;
+      if (stringKeys.includes(key) ? typeof value !== "string" :
+        booleanKeys.includes(key) ? typeof value !== "boolean" :
+        typeof value !== "number" || !Number.isFinite(value)) {
+        throw new BadRequestException(`Sai kiểu dữ liệu: ${key}`);
       }
     }
-
-    for (const [key, value] of Object.entries(data)) {
-      if (value === null) {
-        continue;
+    for (const key of required) {
+      if (data[key] === undefined || data[key] === null) {
+        throw new BadRequestException(`Thiếu trường: ${key}`);
       }
+    }
+    return data;
+  }
 
-      if (key === booleanColumn) {
-        if (typeof value !== "boolean") {
-          throw new BadRequestException(
-            `${key} phải là boolean`,
-          );
-        }
-      } else if (
-        typeof value !== "number" ||
-        !Number.isFinite(value)
-      ) {
-        throw new BadRequestException(
-          `${key} phải là số hợp lệ`,
-        );
-      }
+  private between(data: Row, key: string, min: number, max: number, minIncluded = true) {
+    const v = data[key];
+    if (v !== undefined && v !== null &&
+      (typeof v !== "number" || (minIncluded ? v < min : v <= min) || v > max)) {
+      throw new BadRequestException(`Giá trị ${key} ngoài phạm vi cho phép`);
     }
   }
 
-  // POST /api/history
-  async create(dto: CreateHistoryDto) {
-    const name = dto.name.trim();
-
-    if (!name) {
-      throw new BadRequestException(
-        "Tên phương án không được để trống",
-      );
-    }
-
-    this.validateData(
-      dto.input,
-      INPUT_COLUMNS,
-      REQUIRED_INPUT_COLUMNS,
-    );
-
-    this.validateData(
-      dto.result,
-      RESULT_COLUMNS,
-      RESULT_COLUMNS,
-      "is_retained",
-    );
-
-    const input = dto.input;
-    const hasPositive = (key: string) => {
-      const value = input[key];
+  private validateInput(input: Row) {
+    for (const key of INPUT_POSITIVE) this.between(input, key, 0, Infinity, false);
+    for (const key of INPUT_NONNEGATIVE) this.between(input, key, 0, Infinity);
+    this.between(input, "temperature_c", -50, 1000);
+    this.between(input, "operating_hours_per_day", 0, 24);
+    this.between(input, "fan_efficiency", 0, 1, false);
+    const has = (k: string) => {
+      const value = input[k];
       return typeof value === "number" && value > 0;
     };
-
-    const completeChamber =
-      hasPositive("chamber_height_m") &&
-      hasPositive("chamber_length_m") &&
-      hasPositive("chamber_width_m");
-
-    const partialChamber =
-      hasPositive("d_min_target_um") &&
-      (
-        hasPositive("chamber_height_m") ||
-        hasPositive("chamber_length_m") ||
-        hasPositive("chamber_width_m")
-      );
-
-    if (!completeChamber && !partialChamber) {
-      throw new BadRequestException(
-        "Cần đủ 3 kích thước buồng, hoặc d_min_target_um và ít nhất một kích thước",
-      );
-    }
-
-    return this.dataSource.transaction(async (manager) => {
-      // 1. Tạo phương án
-      const projects: Array<{ id: number }> =
-        await manager.query(
-          `INSERT INTO design_projects
-             (name, mode, note)
-           VALUES ($1, $2, $3)
-           RETURNING id`,
-          [name, dto.mode, dto.note ?? null],
-        );
-
-      const projectId = projects[0].id;
-
-      // 2. Lưu đầu vào
-      const inputColumns = INPUT_COLUMNS.filter(
-        (column) => dto.input[column] !== undefined,
-      );
-
-      const inputNames = ["project_id", ...inputColumns];
-
-      const inputValues = [
-        projectId,
-        ...inputColumns.map(
-          (column) => dto.input[column],
-        ),
-      ];
-
-      const inputParams = inputValues
-        .map((_, index) => `$${index + 1}`)
-        .join(", ");
-
-      await manager.query(
-        `INSERT INTO design_inputs
-          (${inputNames.join(", ")})
-         VALUES (${inputParams})`,
-        inputValues,
-      );
-
-      // 3. Lưu kết quả đã tính toán
-      const resultNames = [
-        "project_id",
-        ...RESULT_COLUMNS,
-      ];
-
-      const resultValues = [
-        projectId,
-        ...RESULT_COLUMNS.map(
-          (column) => dto.result[column],
-        ),
-      ];
-
-      const resultParams = resultValues
-        .map((_, index) => `$${index + 1}`)
-        .join(", ");
-
-      await manager.query(
-        `INSERT INTO design_results
-          (${resultNames.join(", ")})
-         VALUES (${resultParams})`,
-        resultValues,
-      );
-
-      return {
-        message: "Lưu lịch sử thành công",
-        id: projectId,
-      };
-    });
+    if (!(
+      (has("chamber_height_m") && has("chamber_length_m") && has("chamber_width_m")) ||
+      (has("d_min_target_um") && (has("chamber_height_m") || has("chamber_length_m") || has("chamber_width_m")))
+    )) throw new BadRequestException("Cần đủ L/W/H hoặc d_min_target_um và ít nhất một kích thước");
   }
 
-  // GET /api/history/:id
-  // Lấy thông tin chi tiết của một phương án
-  async findOne(id: number) {
-    const projects: Array<Record<string, unknown>> =
-      await this.dataSource.query(
-        `SELECT *
-         FROM design_projects
-         WHERE id = $1`,
-        [id],
-      );
+  // Hàm insert dùng danh sách cột cố định, values có tham số $1/$2... an toàn.
+  private insert(manager: EntityManager, table: "design_inputs" | "design_results", columns: readonly string[], data: Row, projectId: number) {
+    const keys = columns.filter(k => data[k] !== undefined);
+    const args = [projectId, ...keys.map(k => data[k])];
+    const placeholders = args.map((_, i) => `$${i + 1}`).join(", ");
+    return manager.query(
+      `INSERT INTO ${table} (project_id, ${keys.join(", ")}) VALUES (${placeholders})`, args,
+    );
+  }
 
-    if (projects.length === 0) {
-      throw new NotFoundException(
-        `Không tìm thấy lịch sử có ID ${id}`,
-      );
+  // POST /api/history — transaction bao trọn phương án, kết quả và phân cấp bụi.
+  async create(dto: CreateHistoryDto) {
+    const name = dto.name.trim();
+    if (!name) throw new BadRequestException("Tên phương án không được để trống");
+    const input = this.check(dto.input, INPUT, INPUT_REQUIRED, INPUT_NULLABLE);
+    const result = this.check(dto.result, RESULT, RESULT, [], ["is_retained"]);
+    this.validateInput(input);
+    for (const key of ["h_m", "l_m", "b_m"]) this.between(result, key, 0, Infinity, false);
+    if ((dto.fractions?.length ?? 0) > 32767) throw new BadRequestException("Quá nhiều dải bụi");
+
+    try {
+      return await this.db.transaction(async manager => {
+        const [project]: Array<{ id: number }> = await manager.query(
+          `INSERT INTO design_projects (name, mode, note) VALUES ($1, $2, $3) RETURNING id`,
+          [name, dto.mode, dto.note ?? null],
+        );
+        await this.insert(manager, "design_inputs", INPUT, input, project.id);
+        await this.insert(manager, "design_results", RESULT, result, project.id);
+
+        for (const [i, raw] of (dto.fractions ?? []).entries()) {
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+            throw new BadRequestException("fractions phải chứa object");
+          }
+          const f = raw as Row;
+          for (const key of Object.keys(f)) {
+            if (!["d_from_um", "d_to_um", "mass_percent", "result", "collector_ids"].includes(key)) {
+              throw new BadRequestException(`Trường dải bụi không hợp lệ: ${key}`);
+            }
+          }
+          for (const key of ["d_from_um", "mass_percent"]) {
+            if (typeof f[key] !== "number" || !Number.isFinite(f[key])) {
+              throw new BadRequestException(`Thiếu hoặc sai trường: ${key}`);
+            }
+          }
+          if (f.d_to_um !== undefined && f.d_to_um !== null &&
+            (typeof f.d_to_um !== "number" || !Number.isFinite(f.d_to_um))) {
+            throw new BadRequestException("d_to_um phải là số hoặc null");
+          }
+          this.between(f, "d_from_um", 0, Infinity);
+          this.between(f, "mass_percent", 0, 100);
+          if (typeof f.d_to_um === "number" && f.d_to_um < (f.d_from_um as number)) {
+            throw new BadRequestException("d_to_um phải >= d_from_um");
+          }
+          const fr = this.check(f.result, FRACTION_RESULT, FRACTION_RESULT, [], [], ["regime"]);
+          if (!["FULL", "PARTIAL", "OTHER_DEVICE"].includes(String(fr.regime))) {
+            throw new BadRequestException("regime không hợp lệ");
+          }
+          this.between(fr, "efficiency_percent", 0, 100);
+          const ids = f.collector_ids ?? [];
+          if (!Array.isArray(ids) || ids.some(id => !Number.isInteger(id) || id < 1 || id > 32767) ||
+              new Set(ids).size !== ids.length) {
+            throw new BadRequestException("collector_ids phải là danh sách ID số nguyên dương không trùng");
+          }
+          const [fraction]: Array<{ id: number }> = await manager.query(
+            `INSERT INTO dust_fractions (project_id, sort_order, d_from_um, d_to_um, mass_percent)
+             VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+            [project.id, i + 1, f.d_from_um, f.d_to_um ?? null, f.mass_percent],
+          );
+          await manager.query(
+            `INSERT INTO fraction_results
+             (fraction_id, d_rep_um, settling_velocity_m_s, efficiency_percent,
+              inlet_conc_g_m3, outlet_conc_g_m3, regime)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [fraction.id, fr.d_rep_um, fr.settling_velocity_m_s, fr.efficiency_percent,
+              fr.inlet_conc_g_m3, fr.outlet_conc_g_m3, fr.regime],
+          );
+          for (const collectorId of ids) await manager.query(
+            `INSERT INTO fraction_collector_suggestions (fraction_id, collector_id) VALUES ($1,$2)`,
+            [fraction.id, collectorId],
+          );
+        }
+        return { message: "Lưu lịch sử thành công", id: project.id };
+      });
+    } catch (error) {
+      if (error instanceof QueryFailedError &&
+        ["23502", "23503", "23505", "23514", "22P02"].includes(error.driverError?.code)) {
+        throw new BadRequestException("Dữ liệu không thỏa ràng buộc trong PostgreSQL");
+      }
+      throw error;
     }
+  }
 
-    const inputs: Array<Record<string, unknown>> =
-      await this.dataSource.query(
-        `SELECT *
-         FROM design_inputs
-         WHERE project_id = $1`,
-        [id],
-      );
-
-    const results: Array<Record<string, unknown>> =
-      await this.dataSource.query(
-        `SELECT *
-         FROM design_results
-         WHERE project_id = $1`,
-        [id],
-      );
-
-    return {
-      project: projects[0],
-      input: inputs[0] ?? null,
-      result: results[0] ?? null,
-    };
+  // GET /api/history/:id — trả đầy đủ project/input/result và các dải bụi.
+  async findOne(id: number) {
+    const [projects, inputs, result, fractions] = await Promise.all([
+      this.db.query(`SELECT * FROM design_projects WHERE id = $1`, [id]),
+      this.db.query(`SELECT * FROM design_inputs WHERE project_id = $1`, [id]),
+      this.results.findOneBy({ project_id: id }),
+      this.db.query(
+        `SELECT f.*, to_jsonb(fr) - 'fraction_id' AS result,
+          COALESCE((SELECT jsonb_agg(jsonb_build_object('id', c.id, 'code', c.code, 'name', c.name)
+              ORDER BY c.id)
+            FROM fraction_collector_suggestions s JOIN dust_collectors c ON c.id = s.collector_id
+            WHERE s.fraction_id = f.id), '[]'::jsonb) AS collectors
+         FROM dust_fractions f LEFT JOIN fraction_results fr ON fr.fraction_id = f.id
+         WHERE f.project_id = $1 ORDER BY f.sort_order`, [id],
+      ),
+    ]);
+    if (!projects.length) throw new NotFoundException(`Không tìm thấy lịch sử ID ${id}`);
+    return { project: projects[0], input: inputs[0] ?? null, result, fractions };
   }
 }

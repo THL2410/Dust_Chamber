@@ -1,49 +1,39 @@
-
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
-  IsIn,
-  IsNotEmpty,
-  IsObject,
-  IsOptional,
-  IsString,
-  MaxLength,
+  IsArray, IsIn, IsNotEmpty, IsObject, IsOptional,
+  IsString, MaxLength,
 } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
 
 export class CreateHistoryDto {
-  @ApiProperty({
-    example: "Buồng lắng bụi số 1",
-  })
+  @ApiProperty({ example: "Buồng lắng bụi số 1" })
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
   name: string;
 
-  @ApiProperty({
-    enum: ["CHECK", "DESIGN"],
-    example: "DESIGN",
-  })
+  @ApiProperty({ enum: ["CHECK", "DESIGN"] })
   @IsIn(["CHECK", "DESIGN"])
   mode: "CHECK" | "DESIGN";
 
-  @ApiProperty({
-    required: false,
-    example: "Phương án thử nghiệm",
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   note?: string;
 
-  @ApiProperty({
-    type: "object",
-    additionalProperties: true,
-  })
+  @ApiProperty({ type: "object", additionalProperties: true })
   @IsObject()
   input: Record<string, unknown>;
 
-  @ApiProperty({
-    type: "object",
-    additionalProperties: true,
-  })
+  @ApiProperty({ type: "object", additionalProperties: true })
   @IsObject()
   result: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    type: [Object],
+    description: "Mỗi dải bụi gồm d_from_um, d_to_um, mass_percent, result và collector_ids tùy chọn",
+  })
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  fractions?: Record<string, unknown>[];
 }

@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 
-interface UserFormData {
+export interface UserFormData {
     id?: number | string;
     fullName: string;
     address: string;
     phone: string;
     email: string;
     role: string;
-    status: string;
 }
 
 interface EditUserModalProps {
@@ -23,7 +22,6 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
         phone: userData?.phone || '',
         email: userData?.email || '',
         role: userData?.role || 'User',
-        status: userData?.status || 'active'
     });
 
     const [saving, setSaving] = useState(false);
@@ -38,28 +36,32 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
         setSaving(true);
 
         try {
-            // // Đã ẩn token để tránh lỗi ESLint do chưa gọi BE
-            // // const token = localStorage.getItem('accessToken');
-            // /*
-            // await fetch(`http://localhost:3001/api/users/${userData?.id}`, {
-            //   method: 'PUT',
-            //   headers: {
-            //     'Content-Type': 'application/json',
-            //     'Authorization': `Bearer ${token}`
-            //   },
-            //   body: JSON.stringify(formData)
-            // });
-            // */
+            const token = localStorage.getItem('accessToken');
 
-            // Giả lập lưu thành công sau 0.5s
-            setTimeout(() => {
-                setSaving(false);
-                if (onSuccess) onSuccess();
-                onClose();
-            }, 500);
+            const updateData = { ...formData };
+            delete updateData.id;
+
+            const response = await fetch(`http://localhost:3001/api/users/${userData?.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(updateData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Lỗi cập nhật từ phía server');
+            }
+
+            setSaving(false);
+            if (onSuccess) onSuccess();
+            onClose();
 
         } catch (error) {
             console.error("Lỗi cập nhật:", error);
+            alert(`Cập nhật thất bại:\n${(error as Error).message}`);
             setSaving(false);
         }
     };
@@ -101,13 +103,6 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
                                 <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
-                                <select name="status" value={formData.status} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="active">Đang hoạt động</option>
-                                    <option value="locked">Đã khóa</option>
-                                </select>
                             </div>
                         </div>
                     </div>

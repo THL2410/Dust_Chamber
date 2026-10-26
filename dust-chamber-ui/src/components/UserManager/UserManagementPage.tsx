@@ -2,7 +2,15 @@ import { useState, useEffect } from 'react';
 import HistoryDetailModal from '../History/HistoryDetailModal';
 import EditUserModal from './EditUserModal';
 
-import { type UserItem, mockUsersData } from './mockData';
+export interface UserItem {
+    id: number | string;
+    fullName: string;
+    address: string;
+    phone: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+}
 
 const UserManagementPage = () => {
     const [users, setUsers] = useState<UserItem[]>([]);
@@ -15,11 +23,41 @@ const UserManagementPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedHistoryId, setSelectedHistoryId] = useState<number | string | null>(null);
 
+    const fetchUsers = async () => {
+        try {
+            const token = localStorage.getItem('accessToken');
+
+            const response = await fetch(`http://localhost:3001/api/users`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            // SỬA CẢNH BÁO VÀNG: In lỗi và thoát hàm thay vì dùng throw
+            if (!response.ok) {
+                console.error('Lỗi khi lấy dữ liệu từ server');
+                setUsers([]);
+                return; // Kết thúc hàm tại đây
+            }
+
+            const result = await response.json();
+            console.log("Dữ liệu BE trả về:", result);
+            setUsers(result.data || result);
+        } catch (error) {
+            console.error("Lỗi fetch users:", error);
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
     useEffect(() => {
         setTimeout(() => {
-            setUsers(mockUsersData);
-            setLoading(false);
-        }, 500);
+            fetchUsers();
+        }, 0);
     }, []);
 
     const handleViewHistory = (id: string | number) => {
@@ -32,24 +70,53 @@ const UserManagementPage = () => {
         setIsEditModalOpen(true);
     };
 
-    const handleToggleStatus = (id: string | number, currentStatus: string) => {
-        console.log(`Đổi trạng thái user ${id} từ ${currentStatus}`);
+    const handleToggleStatus = async (id: string | number, currentStatus: boolean) => {
+        const actionText = currentStatus ? 'khóa' : 'mở khóa';
+        if (!window.confirm(`Bạn có chắc chắn muốn ${actionText} người dùng này?`)) return;
+
+        try {
+            const token = localStorage.getItem('accessToken');
+
+            const response = await fetch(`http://localhost:3001/api/users/lock/${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                fetchUsers();
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                alert(`Thất bại: ${errorData.message || 'Không thể cập nhật trạng thái'}`);
+            }
+        } catch (error) {
+            console.error("Lỗi đổi trạng thái:", error);
+            alert("Lỗi kết nối đến server!");
+        }
     };
 
     const handleDelete = (id: string | number) => {
         if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
             console.log("Xóa user:", id);
+            // Chỗ này sau sẽ gọi API DELETE
         }
     };
 
+    const filteredUsers = users.filter(user =>
+        user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     return (
-        <div className="p-6 max-w-screen-2xl mx-auto bg-white rounded-xl shadow-md space-y-6">
+        <div className="p-6 max-w-7xl mx-auto bg-white rounded-xl shadow-md space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Quản lý người dùng</h2>
 
                 <input
                     type="text"
-                    placeholder="Tìm theo họ tên..."
+                    placeholder="Tìm theo họ tên, email..."
                     className="border border-gray-300 rounded-lg px-4 py-2 w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -60,7 +127,7 @@ const UserManagementPage = () => {
                 <table className="w-full text-left border-collapse">
                     <thead>
                     <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                        <th className="py-3 px-4 border-b w- text-center">STT</th>
+                        <th className="py-3 px-4 border-b w-16 text-center">STT</th>
                         <th className="py-3 px-4 border-b">Họ và tên</th>
                         <th className="py-3 px-4 border-b">Địa chỉ</th>
                         <th className="py-3 px-4 border-b">Số điện thoại</th>
@@ -73,14 +140,13 @@ const UserManagementPage = () => {
                     <tbody className="text-gray-600 text-sm font-light">
                     {loading ? (
                         <tr><td colSpan={8} className="text-center py-6">Đang tải dữ liệu...</td></tr>
-                    ) : users.length === 0 ? (
+                    ) : filteredUsers.length === 0 ? (
                         <tr><td colSpan={8} className="text-center py-6">Không tìm thấy người dùng</td></tr>
                     ) : (
-                        users.map((user, index) => (
+                        filteredUsers.map((user, index) => (
                             <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
                                 <td className="py-3 px-4 text-center">{index + 1}</td>
                                 <td className="py-3 px-4 font-medium text-gray-900">{user.fullName}</td>
-
                                 <td className="py-3 px-4 text-gray-700">{user.address}</td>
                                 <td className="py-3 px-4 text-gray-700">{user.phone}</td>
                                 <td className="py-3 px-4 text-gray-700">{user.email}</td>
@@ -91,7 +157,7 @@ const UserManagementPage = () => {
                                     </span>
                                 </td>
                                 <td className="py-3 px-4 text-center">
-                                    {user.status === 'active' ? (
+                                    {user.isActive? (
                                         <span className="bg-green-100 text-green-700 py-1 px-3 rounded-full text-xs font-semibold">Đang hoạt động</span>
                                     ) : (
                                         <span className="bg-red-100 text-red-700 py-1 px-3 rounded-full text-xs font-semibold">Đã khóa</span>
@@ -107,7 +173,6 @@ const UserManagementPage = () => {
                                         >
                                             ⏱️
                                         </button>
-
                                         <button
                                             onClick={() => handleEditInfo(user)}
                                             className="p-1.5 bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white rounded transition"
@@ -115,9 +180,8 @@ const UserManagementPage = () => {
                                         >
                                             ✏️
                                         </button>
-
                                         <button
-                                            onClick={() => handleToggleStatus(user.id, user.status)}
+                                            onClick={() => handleToggleStatus(user.id, user.isActive)}
                                             className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-500 hover:text-white rounded transition"
                                             title="Chỉnh sửa trạng thái"
                                         >
@@ -151,7 +215,7 @@ const UserManagementPage = () => {
                     userData={selectedEditUser}
                     onClose={() => setIsEditModalOpen(false)}
                     onSuccess={() => {
-                        console.log("Cập nhật thành công, cần reload bảng");
+                        fetchUsers();
                     }}
                 />
             )}

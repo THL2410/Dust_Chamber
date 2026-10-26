@@ -9,7 +9,6 @@ import {
   ParseIntPipe,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
-import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import {
   ApiBadRequestResponse,
@@ -21,9 +20,9 @@ import {
   ApiOperation,
   ApiTags,
 } from "@nestjs/swagger";
-import { Public } from "commons/decorators/public.decorator";
 import { Roles } from "commons/decorators/roles.decorator";
 import { CurrentUser } from "commons/decorators/current-user.decorator";
+import { AdminCreateUserDto } from "./dto/admin-create-user.dto";
 @ApiBearerAuth()
 @ApiTags("Users")
 @Controller("users")
@@ -31,13 +30,13 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Public()
+  @Roles("admin")
   @ApiOperation({ summary: "Tạo tài khoản người dùng mới" })
   @ApiCreatedResponse({ description: "Người dùng được tạo thành công." })
   @ApiBadRequestResponse({ description: "Dữ liệu đầu vào không hợp lệ." })
   @ApiConflictResponse({ description: "Email này đã được sử dụng." })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(@Body() createUserDto: AdminCreateUserDto) {
+    return this.usersService.create(createUserDto, createUserDto.role);
   }
 
   @Get()

@@ -18,29 +18,30 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto, role: "user" | "admin" = "user") {
     const { password, email, ...restData } = createUserDto;
     const normalizedEmail = email.trim().toLowerCase();
 
     const existingUser = await this.usersRepository.findOne({
       where: { email: normalizedEmail },
     });
+
     if (existingUser) {
       throw new ConflictException("Email này đã được sử dụng");
     }
 
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const newUser = this.usersRepository.create({
       email: normalizedEmail,
       passwordHash,
       ...restData,
-      role: "user",
+      role,
     });
-    const savedUser = await this.usersRepository.save(newUser);
 
+    const savedUser = await this.usersRepository.save(newUser);
     const { passwordHash: _, ...result } = savedUser;
+
     return result;
   }
 

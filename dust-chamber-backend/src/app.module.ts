@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { AuthModule } from "./modules/auth/auth.module";
 import { dbOptions, load } from "./config";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { CalculationsModule } from './modules/calculations/calculations.module';
 
 @Module({
   imports: [

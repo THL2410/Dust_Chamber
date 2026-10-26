@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import HistoryDetailModal from '../History/HistoryDetailModal';
 import EditUserModal from './EditUserModal';
+import AddUserModal from './AddUserModal';
 
 export interface UserItem {
     id: number | string;
     fullName: string;
-    address: string;
     phone: string;
     email: string;
     role: string;
@@ -17,6 +17,7 @@ const UserManagementPage = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedEditUser, setSelectedEditUser] = useState<UserItem | null>(null);
 
@@ -25,8 +26,7 @@ const UserManagementPage = () => {
 
     const fetchUsers = async () => {
         try {
-            const token = localStorage.getItem('accessToken');
-
+            const token = sessionStorage.getItem('accessToken');
             const response = await fetch(`http://localhost:3001/api/users`, {
                 method: 'GET',
                 headers: {
@@ -35,15 +35,13 @@ const UserManagementPage = () => {
                 }
             });
 
-            // SỬA CẢNH BÁO VÀNG: In lỗi và thoát hàm thay vì dùng throw
             if (!response.ok) {
                 console.error('Lỗi khi lấy dữ liệu từ server');
                 setUsers([]);
-                return; // Kết thúc hàm tại đây
+                return;
             }
 
             const result = await response.json();
-            console.log("Dữ liệu BE trả về:", result);
             setUsers(result.data || result);
         } catch (error) {
             console.error("Lỗi fetch users:", error);
@@ -52,7 +50,6 @@ const UserManagementPage = () => {
             setLoading(false);
         }
     };
-
 
     useEffect(() => {
         setTimeout(() => {
@@ -76,7 +73,6 @@ const UserManagementPage = () => {
 
         try {
             const token = localStorage.getItem('accessToken');
-
             const response = await fetch(`http://localhost:3001/api/users/lock/${id}`, {
                 method: 'PATCH',
                 headers: {
@@ -97,10 +93,28 @@ const UserManagementPage = () => {
         }
     };
 
-    const handleDelete = (id: string | number) => {
+    const handleDelete = async (id: string | number) => {
         if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
-            console.log("Xóa user:", id);
-            // Chỗ này sau sẽ gọi API DELETE
+            try {
+                const token = localStorage.getItem('accessToken');
+
+                const response = await fetch(`http://localhost:3001/api/users/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    fetchUsers();
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert(`Xóa thất bại: ${errorData.message || 'Lỗi từ phía server'}`);
+                }
+            } catch (error) {
+                console.error("Lỗi xóa người dùng:", error);
+                alert("Lỗi kết nối đến server!");
+            }
         }
     };
 
@@ -114,13 +128,21 @@ const UserManagementPage = () => {
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800">Quản lý người dùng</h2>
 
-                <input
-                    type="text"
-                    placeholder="Tìm theo họ tên, email..."
-                    className="border border-gray-300 rounded-lg px-4 py-2 w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <div className="flex space-x-4">
+                    <input
+                        type="text"
+                        placeholder="Tìm theo họ tên, email..."
+                        className="border border-gray-300 rounded-lg px-4 py-2 w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition shadow-sm flex items-center"
+                    >
+                        <span className="mr-2 font-bold">+</span> Thêm mới
+                    </button>
+                </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -129,7 +151,6 @@ const UserManagementPage = () => {
                     <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
                         <th className="py-3 px-4 border-b w-16 text-center">STT</th>
                         <th className="py-3 px-4 border-b">Họ và tên</th>
-                        <th className="py-3 px-4 border-b">Địa chỉ</th>
                         <th className="py-3 px-4 border-b">Số điện thoại</th>
                         <th className="py-3 px-4 border-b">Email</th>
                         <th className="py-3 px-4 border-b">Phân quyền</th>
@@ -147,7 +168,6 @@ const UserManagementPage = () => {
                             <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
                                 <td className="py-3 px-4 text-center">{index + 1}</td>
                                 <td className="py-3 px-4 font-medium text-gray-900">{user.fullName}</td>
-                                <td className="py-3 px-4 text-gray-700">{user.address}</td>
                                 <td className="py-3 px-4 text-gray-700">{user.phone}</td>
                                 <td className="py-3 px-4 text-gray-700">{user.email}</td>
 
@@ -202,6 +222,16 @@ const UserManagementPage = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* HIỂN THỊ MODAL THÊM MỚI */}
+            {isAddModalOpen && (
+                <AddUserModal
+                    onClose={() => setIsAddModalOpen(false)}
+                    onSuccess={() => {
+                        fetchUsers();
+                    }}
+                />
+            )}
 
             {isModalOpen && (
                 <HistoryDetailModal

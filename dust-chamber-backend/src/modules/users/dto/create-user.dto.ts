@@ -50,4 +50,12 @@ export class CreateUserDto {
   @IsOptional()
   @Matches(/^(0|\+84)\d{9}$/, { message: "Số điện thoại không hợp lệ" })
   phone?: string;
+
+  @ApiPropertyOptional({
+    example: "Admin",
+    description: "Phân quyền người dùng (Admin hoặc User)",
+  })
+  @IsOptional()
+  @IsString()
+  role?: string;
 }

@@ -2,7 +2,7 @@ import { Injectable, ForbiddenException } from "@nestjs/common"; // <-- Import t
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { InjectRepository } from "@nestjs/typeorm";
-import { User } from "./entities/user.entity";
+import { User,UserRole } from "./entities/user.entity";
 import { Repository } from "typeorm";
 import {
   BadRequestException,
@@ -59,7 +59,7 @@ export class UsersService {
   async update(id: number, updateUserDto: UpdateUserDto, currentUser: any) {
     if (currentUser.role !== "admin" && currentUser.id !== id) {
       throw new ForbiddenException(
-        "Bạn không có quyền chỉnh sửa thông tin của người khác.",
+          "Bạn không có quyền chỉnh sửa thông tin của người khác.",
       );
     }
 
@@ -68,10 +68,14 @@ export class UsersService {
     if (updateUserDto.fullName) {
       user.fullName = updateUserDto.fullName;
     }
+
     if (updateUserDto.phone !== undefined) {
       user.phone = updateUserDto.phone;
     }
 
+    if (updateUserDto.role && currentUser.role === "admin") {
+      user.role = updateUserDto.role.toLowerCase() as UserRole;
+    }
     const updatedUser = await this.usersRepository.save(user);
     const { passwordHash: _, ...result } = updatedUser;
     return result;

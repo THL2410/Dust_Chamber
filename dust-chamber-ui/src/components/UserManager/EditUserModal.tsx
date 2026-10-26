@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 export interface UserFormData {
     id?: number | string;
     fullName: string;
-    address: string;
     phone: string;
     email: string;
     role: string;
@@ -18,7 +17,6 @@ interface EditUserModalProps {
 const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => {
     const [formData, setFormData] = useState<UserFormData>({
         fullName: userData?.fullName || '',
-        address: userData?.address || '',
         phone: userData?.phone || '',
         email: userData?.email || '',
         role: userData?.role || 'User',
@@ -36,7 +34,7 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
         setSaving(true);
 
         try {
-            const token = localStorage.getItem('accessToken');
+            const token = sessionStorage.getItem('accessToken');
 
             const updateData = { ...formData };
             delete updateData.id;
@@ -89,8 +87,8 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phân quyền</label>
                                 <select name="role" value={formData.role} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="Admin">Admin</option>
-                                    <option value="User">User</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="user">User</option>
                                 </select>
                             </div>
                         </div>
@@ -99,10 +97,6 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                                 <input type="email" name="email" value={formData.email} onChange={handleChange} required className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-                                <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500" />
                             </div>
                         </div>
                     </div>

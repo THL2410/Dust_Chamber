@@ -1,6 +1,5 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
 
-// Entity ánh xạ bảng kết quả thật; không dùng synchronize để sửa schema.
 @Entity("design_results")
 export class DesignResult {
   @PrimaryColumn({ type: "integer" }) project_id: number;
@@ -40,7 +39,6 @@ export class DesignResult {
   @Column("double precision") fan_power_kw: number;
 }
 
-// Bảng kết quả tính toán cho từng dải hạt bụi.
 @Entity("fraction_results")
 export class FractionResult {
   @PrimaryColumn({ type: "integer" }) fraction_id: number;

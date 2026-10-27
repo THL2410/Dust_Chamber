@@ -3,6 +3,7 @@ import { ViewColumn, ViewEntity } from "typeorm";
 @ViewEntity({ name: "v_design_summary", synchronize: false })
 export class DesignSummary {
   @ViewColumn() id: number;
+  @ViewColumn({ name: "user_id" }) userId: number;
   @ViewColumn() name: string;
   @ViewColumn() mode: string;
   @ViewColumn({ name: "created_at" }) createdAt: Date;

@@ -1,42 +1,60 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import {
-  IsDateString, IsIn, IsInt, IsOptional, IsString,
-  Matches, Max, MaxLength, Min,
-} from "class-validator";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+
+export enum SortOrder {
+  ASC = 'ASC',
+  DESC = 'DESC',
+}
+
+export enum SortBy {
+  CREATED_AT = 'createdAt',
+  NAME = 'name',
+  ETA_TOTAL_PERCENT = 'etaTotalPercent',
+}
 
 export class HistoryQueryDto {
-  @ApiPropertyOptional({ default: 1 })
+  @ApiPropertyOptional({ default: 1, description: 'Số trang' })
+  @IsOptional()
   @Type(() => Number)
-  @IsInt() @Min(1) @Max(1000000)
-  page = 1;
+  @IsInt({ message: 'Page phải là số nguyên' })
+  @Min(1)
+  page?: number = 1;
 
-  @ApiPropertyOptional({ default: 10 })
+  @ApiPropertyOptional({ default: 10, description: 'Số bản ghi trên 1 trang' })
+  @IsOptional()
   @Type(() => Number)
-  @IsInt() @Min(1) @Max(100)
-  limit = 10;
+  @IsInt()
+  @Min(1)
+  limit?: number = 10;
 
-  @ApiPropertyOptional()
-  @IsOptional() @IsString() @MaxLength(200)
+  @ApiPropertyOptional({ description: 'Tìm kiếm theo tên phương án' })
+  @IsOptional()
+  @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ enum: ["CHECK", "DESIGN"] })
-  @IsOptional() @IsIn(["CHECK", "DESIGN"])
-  mode?: "CHECK" | "DESIGN";
+  @ApiPropertyOptional({ enum: ['CHECK', 'DESIGN'] })
+  @IsOptional()
+  @IsEnum(['CHECK', 'DESIGN'], { message: 'Mode chỉ được là CHECK hoặc DESIGN' })
+  mode?: 'CHECK' | 'DESIGN';
 
-  @ApiPropertyOptional({ example: "2026-10-01" })
-  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) @IsDateString()
+  @ApiPropertyOptional({ description: 'Từ ngày (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
   fromDate?: string;
 
-  @ApiPropertyOptional({ example: "2026-10-31" })
-  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) @IsDateString()
+  @ApiPropertyOptional({ description: 'Đến ngày (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
   toDate?: string;
 
-  @ApiPropertyOptional({ enum: ["createdAt", "name", "etaTotalPercent"] })
-  @IsIn(["createdAt", "name", "etaTotalPercent"])
-  sortBy: "createdAt" | "name" | "etaTotalPercent" = "createdAt";
+  @ApiPropertyOptional({ enum: SortBy, default: SortBy.CREATED_AT })
+  @IsOptional()
+  @IsEnum(SortBy)
+  sortBy?: SortBy = SortBy.CREATED_AT;
 
-  @ApiPropertyOptional({ enum: ["ASC", "DESC"] })
-  @IsIn(["ASC", "DESC"])
-  order: "ASC" | "DESC" = "DESC";
+  @ApiPropertyOptional({ enum: SortOrder, default: SortOrder.DESC })
+  @IsOptional()
+  @IsEnum(SortOrder)
+  order?: SortOrder = SortOrder.DESC;
 }

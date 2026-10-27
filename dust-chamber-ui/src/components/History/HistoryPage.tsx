@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import HistoryDetailModal from './HistoryDetailModal';
 
-import { type HistoryItem, mockHistoryData } from './mockData';
+export interface HistoryItem {
+    id: number;
+    name: string;
+    created_at: string;
+    eta_total_percent: number;
+}
 
 const HistoryPage = () => {
-    const [histories, setHistories] = useState<HistoryItem[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [allData, setAllData] = useState<HistoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [selectedId, setSelectedId] = useState<number | string | null>(null);
@@ -15,36 +19,47 @@ const HistoryPage = () => {
 
     const ITEMS_PER_PAGE = 10;
 
-    const fetchHistories = async () => {
-        setLoading(true);
-        try {
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const filteredData = mockHistoryData.filter(item =>
-                item.projectName.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-
-            const total = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
-            setTotalPages(total > 0 ? total : 1);
-
-            const startIndex = (page - 1) * ITEMS_PER_PAGE;
-            const paginatedData = filteredData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-            setHistories(paginatedData);
-
-        } catch (error) {
-            console.error("Lỗi khi lấy dữ liệu lịch sử:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
-        const delayDebounce = setTimeout(() => {
-            fetchHistories();
-        }, 500);
-        return () => clearTimeout(delayDebounce);
-    }, [page, searchTerm]);
+        const fetchHistories = async () => {
+            try {
+                const token = sessionStorage.getItem('accessToken');
+                const response = await fetch('http://localhost:3001/api/calculations', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Không thể tải lịch sử tính toán');
+
+                const data = await response.json();
+                setAllData(data);
+            } catch (error) {
+                console.error("Lỗi khi lấy dữ liệu:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchHistories();
+    }, []);
+
+    const { histories, totalPages } = useMemo(() => {
+        const filtered = allData.filter(item =>
+            item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        const total = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+
+        const startIndex = (page - 1) * ITEMS_PER_PAGE;
+        const paginated = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+        return {
+            histories: paginated,
+            totalPages: total
+        };
+    }, [allData, searchTerm, page]);
 
     const handleOpenDetail = (id: number | string) => {
         setSelectedId(id);
@@ -54,14 +69,17 @@ const HistoryPage = () => {
     return (
         <div className="p-6 max-w-[95%] mx-auto bg-white rounded-xl shadow-md space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-800">Lịch sử tính toán</h2>
+                <h2 className="text-2xl font-bold text-gray-800">Lịch sử</h2>
 
                 <input
                     type="text"
-                    placeholder="Tìm tên dự án..."
+                    placeholder="Tìm tên cấu hình..."
                     className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                    onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setPage(1);
+                    }}
                 />
             </div>
 
@@ -79,15 +97,17 @@ const HistoryPage = () => {
                     <tbody className="text-gray-600 text-sm font-light">
                     {loading ? (
                         <tr><td colSpan={5} className="text-center py-4">Đang tải dữ liệu...</td></tr>
-                    ) : histories?.length === 0 ? (
+                    ) : histories.length === 0 ? (
                         <tr><td colSpan={5} className="text-center py-4">Không tìm thấy dữ liệu</td></tr>
                     ) : (
-                        histories?.map((item, index) => (
+                        histories.map((item, index) => (
                             <tr key={item.id} className="border-b border-gray-200 hover:bg-gray-50">
                                 <td className="py-3 px-6">{(page - 1) * ITEMS_PER_PAGE + index + 1}</td>
-                                <td className="py-3 px-6 font-medium text-gray-900">{item.projectName}</td>
-                                <td className="py-3 px-6">{new Date(item.createdAt).toLocaleDateString('vi-VN')}</td>
-                                <td className="py-3 px-6 text-green-600 font-semibold">{item.efficiency}%</td>
+                                <td className="py-3 px-6 font-medium text-gray-900">{item.name}</td>
+                                <td className="py-3 px-6">{new Date(item.created_at).toLocaleString('vi-VN')}</td>
+                                <td className="py-3 px-6 text-green-600 font-semibold">
+                                    {Number(item.eta_total_percent).toFixed(2)}%
+                                </td>
                                 <td className="py-3 px-6 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id)}
@@ -107,15 +127,15 @@ const HistoryPage = () => {
                 <button
                     disabled={page === 1}
                     onClick={() => setPage(page - 1)}
-                    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300"
+                    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition"
                 >
                     Trang trước
                 </button>
-                <span className="text-gray-700">Trang {page} / {totalPages || 1}</span>
+                <span className="text-gray-700 font-medium">Trang {page} / {totalPages}</span>
                 <button
-                    disabled={page === totalPages}
+                    disabled={page === totalPages || totalPages === 0}
                     onClick={() => setPage(page + 1)}
-                    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300"
+                    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition"
                 >
                     Trang sau
                 </button>

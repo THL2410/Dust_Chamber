@@ -1,65 +1,61 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize, IsArray, IsNumber, IsOptional, IsPositive,
-  Max, Min, ValidateIf, ValidateNested,
+  IsNumber,
+  IsPositive,
+  Max,
+  Min,
+  ValidateIf,
 } from 'class-validator';
 
-export class ChamberSizeDto {
-  @IsNumber() @IsPositive() length!: number; // L (m)
-  @IsNumber() @IsPositive() width!: number;  // B (m)
-  @IsNumber() @IsPositive() height!: number; // H (m)
-}
-
-export class ParticleFractionDto {
-  @IsNumber() @Min(0) dMin!: number;          // µm
-  @IsNumber() @IsPositive() dMax!: number;    // µm (đường kính dùng để tính)
-  @IsNumber() @Min(0) @Max(100) percent!: number; // % khối lượng
-}
-
-export class DuctDto {
-  @IsOptional() @IsNumber() @IsPositive() velocity?: number;       // v (m/s), mặc định 15
-  @IsOptional() @IsNumber() @IsPositive() length?: number;         // ld (m), mặc định 32
-  @IsOptional() @IsNumber() @IsPositive() frictionR?: number;      // R (Pa/m), mặc định 4.05
-  @IsOptional() @IsNumber() @IsPositive() roughnessBeta?: number;  // β, mặc định 1
-  @IsOptional() @IsNumber() @Min(0) sumLocalResistance?: number;   // Σξ, mặc định 0
-  @IsOptional() @IsNumber() @IsPositive() chamberPressureDrop?: number; // ΔPbl (Pa), mặc định 245
-  @IsOptional() @IsNumber() @IsPositive() @Max(1) fanEfficiency?: number; // η quạt, mặc định 0.7
-}
-
+/**
+ * All values use SI units:
+ * flowRate: m³/s; temperature: °C; dimensions: m;
+ * particleDensity: kg/m³; particleDiameter: m.
+ */
 export class CalculateChamberDto {
-  @IsNumber() @IsPositive() flowRate!: number;                 // Q (m3/h)
-  @IsNumber() @Min(-50) @Max(1000) temperature!: number;       // t (°C)
-  @IsNumber() @Min(0) dustConcentration!: number;              // Cb (g/m3)
-  @IsNumber() @IsPositive() dustDensity!: number;              // ρb (kg/m3)
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  flowRate!: number;
 
-  // --- Chế độ KIỂM TRA: có kích thước sẵn ---
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => ChamberSizeDto)
-  chamberSize?: ChamberSizeDto;
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(-50)
+  @Max(500)
+  temperature!: number;
 
-  // --- Chế độ THIẾT KẾ: chưa có kích thước ---
-  @ValidateIf((o) => !o.chamberSize)
-  @IsNumber() @IsPositive()
-  targetDiameter?: number;  // dmin muốn giữ lại (µm)
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  length!: number;
 
-  @ValidateIf((o) => !o.chamberSize)
-  @IsNumber() @IsPositive()
-  designLength?: number;    // L chọn trước (m)
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  width!: number;
 
-  @IsOptional() @IsNumber() @IsPositive() @Max(2.5)
-  chamberVelocity?: number; // vận tốc khí trong buồng (m/s), mặc định 0.18
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  height!: number;
 
-  // --- Phân cấp cỡ hạt (không bắt buộc) ---
-  @IsOptional()
-  @IsArray() @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => ParticleFractionDto)
-  fractions?: ParticleFractionDto[];
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  particleDensity!: number;
 
-  // --- Ống dẫn + quạt (không bắt buộc) ---
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DuctDto)
-  duct?: DuctDto;
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  particleDiameter!: number;
+
+  /**
+   * Optional gas density override in kg/m³.
+   * Normally leave omitted to use the PDF's approximation.
+   */
+  @ValidateIf((_obj, value) => value !== undefined)
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsPositive()
+  gasDensity?: number;
 }

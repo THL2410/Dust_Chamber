@@ -1,3 +1,4 @@
+
 import { Module } from "@nestjs/common";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
@@ -6,7 +7,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { AuthModule } from "./modules/auth/auth.module";
 import { dbOptions, load } from "./config";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { CalculationsModule } from './modules/calculations/calculations.module';
+import { CalculationsModule } from "./modules/calculations/calculations.module";
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CalculationsModule } from './modules/calculations/calculations.module';
 
     UsersModule,
     AuthModule,
+    CalculationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

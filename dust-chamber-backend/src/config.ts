@@ -1,3 +1,4 @@
+
 import { ConfigService } from "@nestjs/config";
 import { JwtModuleOptions } from "@nestjs/jwt";
 import { TypeOrmModuleOptions } from "@nestjs/typeorm";
@@ -8,11 +9,12 @@ export const load = () => {
 
   const dbConfig = {
     host: env.DB_HOST || "127.0.0.1",
-    port: parseInt(env.DB_PORT || "5436", 10),
+    port: parseInt(env.DB_PORT || "5432", 10),
     username: env.DB_USER || "postgres",
-    password: String(env.DB_PASS || "123456"),
-    database: env.DB_NAME || "dust_chamber_db",
+    password: String(env.DB_PASS || "Siuma299@#*()"),
+    database: env.DB_NAME || "dust_chamber",
   };
+
   return {
     db: {
       ...dbConfig,
@@ -26,6 +28,13 @@ export const load = () => {
       migrations: [join(__dirname, "./migrations/*{.ts,.js}")],
     } as TypeOrmModuleOptions,
 
+    jwt: {
+      secret: env.JWT_ACCESS_SECRET,
+      signOptions: {
+        expiresIn: "15m",
+      },
+    } as JwtModuleOptions,
+
     rabbitmq: {
       url: env.RABBITMQ_URL || "amqp://localhost:5674",
     },
@@ -34,13 +43,6 @@ export const load = () => {
       host: env.REDIS_HOST || "localhost",
       port: parseInt(env.REDIS_PORT || "6370", 10),
     },
-
-    // s3: {
-    //   accessKeyId: env.S3_ACCESS_ID,
-    //   secretAccessKey: env.S3_ACCESS_KEY,
-    //   bucketName: env.S3_BUCKET,
-    //   region: env.S3_REGION || "ap-southeast-1",
-    // },
   };
 };
 

@@ -1,4 +1,3 @@
-```typescript
 import {
   Injectable,
   UnprocessableEntityException,
@@ -186,4 +185,3 @@ export class CalculationsService {
     }
   }
 }
-```

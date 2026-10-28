@@ -1,6 +1,6 @@
 import { CalculationEngine } from '../calculation.engine';
 
-describe('CalculationEngine', () => {
+describe('CalculationEngine - Updated', () => {
   it('calculates gas density using the analyzed PDF approximation', () => {
     expect(CalculationEngine.gasDensity(0)).toBeCloseTo(1.293, 6);
   });
@@ -24,7 +24,7 @@ describe('CalculationEngine', () => {
 
   it('limits idealized efficiency to 0–100 percent', () => {
     const result = CalculationEngine.calculate({
-      flowRate: 2.5,
+      flowRate: 2.5, // Truyền trực tiếp m³/s
       temperature: 40,
       length: 4,
       width: 2,
@@ -40,5 +40,31 @@ describe('CalculationEngine', () => {
     expect(() =>
       CalculationEngine.settlingVelocity(50e-6, 1, 1.2, 1.8e-5),
     ).toThrow(/Particle density must be greater than gas density/);
+  });
+
+  it('calculates Example 3 (Wood dust system design with fractions and fan power)', () => {
+    const result = CalculationEngine.calculate({
+      flowRate: 10500, // Nhập m³/h (Hệ thống sẽ tự nhận diện > 100 để đổi sang m³/s)
+      temperature: 30,
+      length: 6,
+      width: 2.5,
+      height: 2,
+      particleDensity: 800,
+      dustConcentration: 10,
+      particleFractions: [
+        { diameterMicron: 20, weightPercent: 2.5 },
+        { diameterMicron: 30, weightPercent: 2.5 },
+        { diameterMicron: 50, weightPercent: 70 },
+        { diameterMicron: 70, weightPercent: 25 },
+      ],
+      ductVelocity: 15,
+      localResistanceSum: 3.0,
+      fanEfficiency: 0.7,
+    });
+
+    expect(result.gradedEfficiency).toBeDefined();
+    expect(result.gradedEfficiency?.totalEfficiencyPercent).toBeGreaterThan(0);
+    expect(result.ductAndFan).toBeDefined();
+    expect(result.ductAndFan?.fanPowerKW).toBeGreaterThan(0);
   });
 });

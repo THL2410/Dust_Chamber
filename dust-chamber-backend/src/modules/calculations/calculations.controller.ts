@@ -1,10 +1,30 @@
 
-import { Body, Controller, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Request } from 'express';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+
 import { CalculateChamberDto } from './dto/calculate-chamber.dto';
 import { CalculationsService } from './calculations.service';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id?: number;
+    userId?: number;
+  };
+}
+
 @ApiTags('Calculations')
+@ApiBearerAuth()
 @Controller('calculations')
 export class CalculationsController {
   constructor(
@@ -16,7 +36,18 @@ export class CalculationsController {
     summary: 'Calculate settling-chamber parameters',
     description: 'All request dimensions use SI units.',
   })
-  calculateChamber(@Body() dto: CalculateChamberDto) {
-    return this.calculationsService.calculateChamber(dto);
+  async calculateChamber(
+    @Body() dto: CalculateChamberDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user?.id ?? req.user?.userId;
+
+    if (userId == null) {
+      throw new UnauthorizedException(
+        'Cannot identify the authenticated user.',
+      );
+    }
+
+    return this.calculationsService.calculateChamber(dto, userId);
   }
 }

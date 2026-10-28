@@ -1,3 +1,4 @@
+
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -13,76 +14,108 @@ export class ParticleFractionDto {
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  diameterMicron!: number; // Đường kính hạt (µm)
+  diameterMicron!: number;
 
   @Type(() => Number)
   @IsNumber()
-  weightPercent!: number; // Tỷ lệ % khối lượng (%)
+  weightPercent!: number;
 }
 
 export class CalculateChamberDto {
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  flowRate!: number; // Lưu lượng khí Q (m³/h hoặc m³/s)
+  flowRate!: number;
 
   @Type(() => Number)
   @IsNumber()
   @Min(-50)
   @Max(500)
-  temperature!: number; // Nhiệt độ °C
+  temperature!: number;
 
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  length!: number; // Chiều dài L (m)
+  length!: number;
 
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  width!: number; // Chiều rộng B (m)
+  width!: number;
 
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  height!: number; // Chiều cao H (m)
+  height!: number;
 
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  particleDensity!: number; // Khối lượng riêng bụi (kg/m³)
+  particleDensity!: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  particleDiameter?: number; // Đường kính hạt đơn lẻ (m) - dùng cho tính toán cơ bản
+  particleDiameter?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  dustConcentration?: number; // Nồng độ bụi vào C_b (g/m³)
+  dustConcentration?: number;
 
-  // Bảng phân cấp thành phần hạt (Dùng cho Ví dụ 2 & Ví dụ 3)
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ParticleFractionDto)
   particleFractions?: ParticleFractionDto[];
 
-  // Các thông số thiết kế đường ống & quạt (Ví dụ 3)
+  // Thông số đường ống và quạt
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  ductVelocity?: number; // Vận tốc chọn trong ống v (m/s), thường 10-20 m/s
+  @IsPositive()
+  ductVelocity?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  localResistanceSum?: number; // Tổng trở lực cục bộ ∑ξ_i
+  @Min(0)
+  gasVelocity?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  fanEfficiency?: number; // Hiệu suất quạt η (vd: 0.7 cho 70%)
+  @Min(0)
+  pipeLength?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  frictionRPAM?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  roughnessBeta?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  localResistanceSum?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  chamberPressureDropPA?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  fanEfficiency?: number;
 }

@@ -1,4 +1,5 @@
-import { ViewColumn, ViewEntity } from "typeorm";
+import {JoinColumn, ManyToOne, ViewColumn, ViewEntity} from "typeorm";
+import { User } from "../../users/entities/user.entity";
 
 @ViewEntity({ name: "v_design_summary", synchronize: false })
 export class DesignSummary {
@@ -18,4 +19,8 @@ export class DesignSummary {
   @ViewColumn({ name: "eta_total_percent" }) etaTotalPercent: number;
   @ViewColumn({ name: "cb_out_mg_m3" }) cbOutMgM3: number;
   @ViewColumn({ name: "fan_power_kw" }) fanPowerKw: number;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: "user_id" })
+  owner: User;
 }

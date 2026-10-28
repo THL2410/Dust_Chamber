@@ -42,14 +42,16 @@ const FRACTION_RESULT = [
 
 type Row = Record<string, unknown>;
 
-// Cột trả về cho danh sách / xem theo id (đọc từ view v_design_summary).
-const SUMMARY_COLUMNS = `id, user_id AS "userId", name, mode, created_at AS "createdAt",
-  flow_rate_m3_h AS "flowRateM3H", temperature_c AS "temperatureC",
-  dust_concentration_g_m3 AS "dustConcentrationGM3",
-  h_m AS "hM", l_m AS "lM", b_m AS "bM",
-  d_min_calc_um AS "dMinCalcUm", is_retained AS "isRetained",
-  eta_total_percent AS "etaTotalPercent", cb_out_mg_m3 AS "cbOutMgM3",
-  fan_power_kw AS "fanPowerKw"`;
+// Đã bổ sung u.full_name AS "ownerName" vào SUMMARY_COLUMNS để phục vụ Admin.
+const SUMMARY_COLUMNS = `
+  v.id, v.user_id AS "userId", u.full_name AS "ownerName", v.name, v.mode, v.created_at AS "createdAt",
+  v.flow_rate_m3_h AS "flowRateM3H", v.temperature_c AS "temperatureC",
+  v.dust_concentration_g_m3 AS "dustConcentrationGM3",
+  v.h_m AS "hM", v.l_m AS "lM", v.b_m AS "bM",
+  v.d_min_calc_um AS "dMinCalcUm", v.is_retained AS "isRetained",
+  v.eta_total_percent AS "etaTotalPercent", v.cb_out_mg_m3 AS "cbOutMgM3",
+  v.fan_power_kw AS "fanPowerKw"
+`;
 
 @Injectable()
 export class HistoryService {
@@ -78,7 +80,6 @@ export class HistoryService {
     return this.list(q, user.role === "admin" ? undefined : user.id);
   }
 
-
   async findByUser(userId: number, q: HistoryQueryDto, user: JwtUser) {
     this.assertCanAccess(user, userId);
     const result = await this.list(q, userId);
@@ -100,34 +101,39 @@ export class HistoryService {
       conditions.push(`${sql} $${values.length}`);
     };
 
-    if (userId !== undefined) filter("user_id =", userId);
-    if (q.search?.trim()) filter("name ILIKE", `%${q.search.trim()}%`);
-    if (q.mode) filter("mode =", q.mode);
-    if (q.fromDate) filter("created_at >=", new Date(`${q.fromDate}T00:00:00+07:00`));
+    if (userId !== undefined) filter("v.user_id =", userId);
+    if (q.search?.trim()) {
+      values.push(`%${q.search.trim()}%`);
+      // Tìm kiếm trên cả tên dự án hoặc tên người dùng (dành cho Admin)
+      conditions.push(`(v.name ILIKE $${values.length} OR u.full_name ILIKE $${values.length})`);
+    }
+    if (q.mode) filter("v.mode =", q.mode);
+    if (q.fromDate) filter("v.created_at >=", new Date(`${q.fromDate}T00:00:00+07:00`));
     if (q.toDate) {
-      filter("created_at <", new Date(Date.parse(`${q.toDate}T00:00:00+07:00`) + 86400000));
+      filter("v.created_at <", new Date(Date.parse(`${q.toDate}T00:00:00+07:00`) + 86400000));
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const sortColumns: Record<string, string> = {
-      createdAt: "created_at",
-      name: "name",
-      etaTotalPercent: "eta_total_percent",
+      createdAt: "v.created_at",
+      name: "v.name",
+      etaTotalPercent: "v.eta_total_percent",
     };
-    const sort = sortColumns[String(q.sortBy ?? "createdAt")] ?? "created_at";
+    const sort = sortColumns[String(q.sortBy ?? "createdAt")] ?? "v.created_at";
     const direction = String(q.order).toUpperCase() === "ASC" ? "ASC" : "DESC";
     const page = q.page ?? 1;
     const limit = q.limit ?? 10;
 
     const [count]: Array<{ total: number }> = await this.db.query(
-        `SELECT COUNT(*)::int AS total FROM v_design_summary ${where}`, values,
+        `SELECT COUNT(*)::int AS total FROM v_design_summary v LEFT JOIN users u ON v.user_id = u.id ${where}`, values,
     );
     const data = await this.db.query(
         `SELECT ${SUMMARY_COLUMNS}
-       FROM v_design_summary ${where}
-       ORDER BY ${sort} ${direction}, id DESC
-       LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-        [...values, limit, (page - 1) * limit],
+         FROM v_design_summary v LEFT JOIN users u ON v.user_id = u.id
+         ${where}
+         ORDER BY ${sort} ${direction}, v.id DESC
+         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+        [...values, limit, (page - 1) * limit], // Đã sửa (page - 1)
     );
     const total = count?.total ?? 0;
     return { data, meta: {
@@ -194,89 +200,6 @@ export class HistoryService {
     );
   }
 
-  // // POST /api/history — transaction bao trọn phương án, kết quả và phân cấp bụi.
-  // async create(dto: CreateHistoryDto, user: JwtUser) {
-  //   const name = dto.name.trim();
-  //   if (!name) throw new BadRequestException("Tên phương án không được để trống");
-  //   const input = this.check(dto.input, INPUT, INPUT_REQUIRED, INPUT_NULLABLE);
-  //   const result = this.check(dto.result, RESULT, RESULT, [], ["is_retained"]);
-  //   this.validateInput(input);
-  //   for (const key of ["h_m", "l_m", "b_m"]) this.between(result, key, 0, Infinity, false);
-  //   if ((dto.fractions?.length ?? 0) > 32767) throw new BadRequestException("Quá nhiều dải bụi");
-  //
-  //   try {
-  //     return await this.db.transaction(async manager => {
-  //       const [project]: Array<{ id: number }> = await manager.query(
-  //           `INSERT INTO design_projects (user_id, name, mode, note) VALUES ($1, $2, $3, $4) RETURNING id`,
-  //           [user.id, name, dto.mode, dto.note ?? null],
-  //       );
-  //       await this.insert(manager, "design_inputs", INPUT, input, project.id);
-  //       await this.insert(manager, "design_results", RESULT, result, project.id);
-  //
-  //       for (const [i, raw] of (dto.fractions ?? []).entries()) {
-  //         if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-  //           throw new BadRequestException("fractions phải chứa object");
-  //         }
-  //         const f = raw as unknown as Row;
-  //         for (const key of Object.keys(f)) {
-  //           if (!["d_from_um", "d_to_um", "mass_percent", "result", "collector_ids"].includes(key)) {
-  //             throw new BadRequestException(`Trường dải bụi không hợp lệ: ${key}`);
-  //           }
-  //         }
-  //         for (const key of ["d_from_um", "mass_percent"]) {
-  //           if (typeof f[key] !== "number" || !Number.isFinite(f[key])) {
-  //             throw new BadRequestException(`Thiếu hoặc sai trường: ${key}`);
-  //           }
-  //         }
-  //         if (f.d_to_um !== undefined && f.d_to_um !== null &&
-  //             (typeof f.d_to_um !== "number" || !Number.isFinite(f.d_to_um))) {
-  //           throw new BadRequestException("d_to_um phải là số hoặc null");
-  //         }
-  //         this.between(f, "d_from_um", 0, Infinity);
-  //         this.between(f, "mass_percent", 0, 100);
-  //         if (typeof f.d_to_um === "number" && f.d_to_um < (f.d_from_um as number)) {
-  //           throw new BadRequestException("d_to_um phải >= d_from_um");
-  //         }
-  //         const fr = this.check(f.result, FRACTION_RESULT, FRACTION_RESULT, [], [], ["regime"]);
-  //         if (!["FULL", "PARTIAL", "OTHER_DEVICE"].includes(String(fr.regime))) {
-  //           throw new BadRequestException("regime không hợp lệ");
-  //         }
-  //         this.between(fr, "efficiency_percent", 0, 100);
-  //         const ids = f.collector_ids ?? [];
-  //         if (!Array.isArray(ids) || ids.some(id => !Number.isInteger(id) || id < 1 || id > 32767) ||
-  //             new Set(ids).size !== ids.length) {
-  //           throw new BadRequestException("collector_ids phải là danh sách ID số nguyên dương không trùng");
-  //         }
-  //         const [fraction]: Array<{ id: number }> = await manager.query(
-  //             `INSERT INTO dust_fractions (project_id, sort_order, d_from_um, d_to_um, mass_percent)
-  //              VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-  //             [project.id, i + 1, f.d_from_um, f.d_to_um ?? null, f.mass_percent],
-  //         );
-  //         await manager.query(
-  //             `INSERT INTO fraction_results
-  //              (fraction_id, d_rep_um, settling_velocity_m_s, efficiency_percent,
-  //               inlet_conc_g_m3, outlet_conc_g_m3, regime)
-  //              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-  //             [fraction.id, fr.d_rep_um, fr.settling_velocity_m_s, fr.efficiency_percent,
-  //               fr.inlet_conc_g_m3, fr.outlet_conc_g_m3, fr.regime],
-  //         );
-  //         for (const collectorId of ids) await manager.query(
-  //             `INSERT INTO fraction_collector_suggestions (fraction_id, collector_id) VALUES ($1,$2)`,
-  //             [fraction.id, collectorId],
-  //         );
-  //       }
-  //       return { message: "Lưu lịch sử thành công", id: project.id };
-  //     });
-  //   } catch (error) {
-  //     if (error instanceof QueryFailedError &&
-  //         ["23502", "23503", "23505", "23514", "22P02"].includes(
-  //             (error.driverError as { code?: string } | undefined)?.code ?? "")) {
-  //       throw new BadRequestException("Dữ liệu không thỏa ràng buộc trong PostgreSQL");
-  //     }
-  //     throw error;
-  //   }
-  // }
-
   async findOne(id: number, user: JwtUser) {
     const project = await this.getAccessibleProject(id, user);
     const [inputs, result, fractions] = await Promise.all([
@@ -294,7 +217,6 @@ export class HistoryService {
     ]);
     return { project, input: inputs[0] ?? null, result, fractions };
   }
-
 
   async remove(id: number, user: JwtUser) {
     await this.getAccessibleProject(id, user);

@@ -44,7 +44,7 @@ export class HistoryController {
   // }
 
   @Get(":id")
-  @ApiOperation({ summary: "Xem một lịch sử theo id (dạng tóm tắt)" })
+  @ApiOperation({ summary: "Xem một lịch sử theo id" })
   @ApiOkResponse({ description: "Một dòng tóm tắt của phương án" })
   @ApiNotFoundResponse({ description: "Không tìm thấy lịch sử" })
   @ApiForbiddenResponse({ description: "Không có quyền xem lịch sử của người khác" })

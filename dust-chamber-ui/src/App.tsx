@@ -53,9 +53,7 @@ const Navbar = () => {
 
     const handleLogout = (e: React.MouseEvent) => {
         e.preventDefault();
-
         sessionStorage.removeItem('accessToken');
-
         window.location.replace('/login');
     };
 
@@ -64,6 +62,7 @@ const Navbar = () => {
             <div className="max-w-7xl mx-auto flex justify-between items-center">
                 <div className="flex gap-4">
                     <Link to="/history" className={getNavClass('/history')}>Lịch sử</Link>
+
                     {role === 'Admin' && (
                         <Link to="/users" className={getNavClass('/users')}>Quản lý User</Link>
                     )}
@@ -79,9 +78,9 @@ const Navbar = () => {
         </nav>
     );
 };
+
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
-    const role = getUserRole();
 
     if (location.pathname === '/login') {
         return <>{children}</>;
@@ -89,7 +88,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
 
     return (
         <div className="min-h-screen bg-gray-100">
-            {role === 'Admin' && <Navbar />}
+            <Navbar />
             <div className="p-4">
                 {children}
             </div>
@@ -117,12 +116,10 @@ function App() {
                                 <HistoryPage />
                             </ProtectedRoute>
                         }
-                    />
+                    />git sta
                     <Route
                         path="/login"
-                        element={
-                                <LoginPage />
-                        }
+                        element={<LoginPage />}
                     />
                     <Route
                         path="*"

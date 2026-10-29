@@ -1,5 +1,6 @@
 import {
   Injectable,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -37,7 +38,7 @@ export class CalculationsService {
       // 2. Lưu dữ liệu trong cùng một transaction
       const projectId = await this.dataSource.transaction(
         async (manager) => {
-          // Lưu vào design_projects
+          // Lưu vào design_projects (dùng tên mặc định trực tiếp)
           const project = manager.create(DesignProjects, {
             userId,
             name: 'Phương án buồng lắng bụi',
@@ -68,7 +69,6 @@ export class CalculationsService {
 
             pipeLengthM: dto.pipeLength ?? 32,
 
-            // Đúng tên thuộc tính trong DesignInputs Entity
             frictionRPaM: dto.frictionRPAM ?? 4.05,
 
             roughnessBeta: dto.roughnessBeta ?? 1,
@@ -183,5 +183,46 @@ export class CalculationsService {
         message,
       });
     }
+  }
+
+  // ==================== LẤY DANH SÁCH ====================
+  async findAll() {
+    return await this.projectRepository.find({
+      relations: {
+        designInputs: true,
+        designResults: true,
+        user: true,
+      },
+      order: { id: 'DESC' },
+    });
+  }
+
+  // ==================== LẤY CHI TIẾT THEO ID ====================
+  async findOne(id: number) {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+      relations: {
+        designInputs: true,
+        designResults: true,
+        user: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Không tìm thấy phương án tính toán với ID là ${id}`);
+    }
+
+    return project;
+  }
+
+  // ==================== XÓA THEO ID ====================
+  async remove(id: number) {
+    const project = await this.findOne(id);
+    await this.projectRepository.remove(project);
+
+    return {
+      success: true,
+      message: `Đã xóa thành công phương án tính toán với ID ${id}`,
+    };
   }
 }

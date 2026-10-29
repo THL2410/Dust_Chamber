@@ -18,7 +18,7 @@ export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
 
   @Get()
-  @Roles("admin")
+  @Roles("user","admin")
   @ApiOperation({
     summary: "Xem tất cả lịch sử (phân trang, tìm kiếm, lọc). Admin: tất cả; user: của chính mình",
   })

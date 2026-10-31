@@ -42,7 +42,6 @@ const FRACTION_RESULT = [
 
 type Row = Record<string, unknown>;
 
-// Đã bổ sung u.full_name AS "ownerName" vào SUMMARY_COLUMNS để phục vụ Admin.
 const SUMMARY_COLUMNS = `
   v.id, v.user_id AS "userId", u.full_name AS "ownerName", v.name, v.mode, v.created_at AS "createdAt",
   v.flow_rate_m3_h AS "flowRateM3H", v.temperature_c AS "temperatureC",
@@ -104,7 +103,6 @@ export class HistoryService {
     if (userId !== undefined) filter("v.user_id =", userId);
     if (q.search?.trim()) {
       values.push(`%${q.search.trim()}%`);
-      // Tìm kiếm trên cả tên dự án hoặc tên người dùng (dành cho Admin)
       conditions.push(`(v.name ILIKE $${values.length} OR u.full_name ILIKE $${values.length})`);
     }
     if (q.mode) filter("v.mode =", q.mode);

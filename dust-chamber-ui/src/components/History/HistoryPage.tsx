@@ -23,7 +23,6 @@ const HistoryPage = () => {
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
     const [selectedId, setSelectedId] = useState<number | string | null>(null);
-    // KHÔI PHỤC LẠI STATE LƯU TAB ĐƯỢC CHỌN
     const [selectedTab, setSelectedTab] = useState<'input' | 'result' | 'fraction'>('input');
     const [isModalOpen, setIsModalOpen] = useState(false);
 

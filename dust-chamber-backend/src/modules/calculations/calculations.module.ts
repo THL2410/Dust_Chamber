@@ -5,12 +5,12 @@ import { CalculationsService } from './calculations.service';
 import { DesignProjects } from './entities/DesignProjects';
 import { DesignInputs } from './entities/DesignInputs';
 import { DesignResults } from './entities/DesignResults';
-import { AuthModule } from '../auth/auth.module'; // Đảm bảo đường dẫn tới auth.module chính xác
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([DesignProjects, DesignInputs, DesignResults]),
-    AuthModule, // <--- Thêm AuthModule vào đây để cung cấp AuthService cho JwtAuthGuard
+    AuthModule,
   ],
   controllers: [CalculationsController],
   providers: [CalculationsService],

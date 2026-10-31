@@ -17,7 +17,6 @@ export class CalculationsService {
   ) {}
 
   async calculateAndSave(userId: number, dto: CreateCalculationDto) {
-    // Khớp ràng buộc ck_input_mode_data của DB: báo lỗi 400 rõ ràng thay vì lỗi SQL
     const { chamberHeightM: H, chamberLengthM: L, chamberWidthM: B, dMinTargetUm: d } = dto;
     const hasAll = !!(H && L && B);
     const hasDminAndOne = !!(d && (H || L || B));
@@ -48,7 +47,6 @@ export class CalculationsService {
       fanEfficiency: dto.fanEfficiency ?? K.defaultFanEfficiency,
     };
 
-    // Tính trước khi ghi DB: lỗi tính toán thì không tạo project nào
     let calc;
     try {
       calc = calculateDesign({
@@ -59,7 +57,6 @@ export class CalculationsService {
       throw new BadRequestException((e as Error).message);
     }
 
-    // Vận tốc khí thực trong buồng (= L / τ2). Ở chế độ CHECK nó khác giá trị mặc định 0,18.
     const actualGasVelocityMS = calc.result.lM / calc.result.tau2S;
 
     return this.dataSource.transaction(async (manager) => {
@@ -81,7 +78,6 @@ export class CalculationsService {
       const result = await manager.save(
         manager.create(DesignResults, { projectId: project.id, ...calc.result }),
       );
-      // Lưu từng dải hạt: dust_fractions (đầu vào) và fraction_results (kết quả của dải)
       const fractions: unknown[] = [];
       for (const [idx, f] of calc.fractionResults.entries()) {
         const [row] = await manager.query(
@@ -97,7 +93,6 @@ export class CalculationsService {
           [row.id, f.dRepUm, f.settlingVelocityMS, f.efficiencyPercent,
            f.inletConcGM3, f.outletConcGM3, f.regime],
         );
-        // Dải buồng lắng không xử lý nổi: gợi ý thiết bị lọc có khoảng cỡ hạt phủ lên dải này
         let collectors: unknown[] = [];
         if (f.regime === 'OTHER_DEVICE') {
           collectors = await manager.query(
@@ -137,7 +132,6 @@ export class CalculationsService {
     });
   }
 
-  // Lọc theo userId để user này không xem/xóa được phương án của user khác
   async findOne(id: number, userId: number) {
     const project = await this.projectRepo.findOne({
       where: { id, userId },

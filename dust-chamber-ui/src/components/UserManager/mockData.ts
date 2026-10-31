@@ -1,5 +1,3 @@
-// File: mockData.ts
-
 export interface UserItem {
     id: number | string;
     fullName: string;

@@ -46,7 +46,6 @@ export interface DesignCalcOutput {
   mode: 'CHECK' | 'DESIGN';
   warnings: string[];
   fractionResults: FractionCalcResult[];
-  // khớp 1-1 với cột của entity DesignResults (trừ projectId)
   result: {
     hM: number; lM: number; bM: number;
     muPaS: number; rhoGasKgM3: number;

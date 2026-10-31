@@ -6,6 +6,7 @@ import { DesignInputs } from './entities/DesignInputs';
 import { DesignResults } from './entities/DesignResults';
 import { CreateCalculationDto } from './dto/create-calculation.dto';
 import { calculateDesign } from './design-calculation';
+import { CALCULATION_CONSTANTS as K } from './calculations.constants';
 
 @Injectable()
 export class CalculationsService {
@@ -35,16 +36,16 @@ export class CalculationsService {
       chamberHeightM: H ?? null,
       chamberLengthM: L ?? null,
       chamberWidthM: B ?? null,
-      gasVelocityMS: dto.gasVelocityMS ?? 0.18,
-      operatingHoursPerDay: dto.operatingHoursPerDay ?? 16,
-      pipeVelocityMS: dto.pipeVelocityMS ?? 15,
+      gasVelocityMS: dto.gasVelocityMS ?? K.defaultGasVelocityInChamber,
+      operatingHoursPerDay: dto.operatingHoursPerDay ?? K.defaultOperatingHoursPerDay,
+      pipeVelocityMS: dto.pipeVelocityMS ?? K.defaultPipeVelocity,
       pipeDiameterM: dto.pipeDiameterM ?? null,
-      pipeLengthM: dto.pipeLengthM ?? 32,
-      frictionRPaM: dto.frictionRPaM ?? 4.05,
-      roughnessBeta: dto.roughnessBeta ?? 1,
-      localResistanceSum: dto.localResistanceSum ?? 0,
-      chamberPressureDropPa: dto.chamberPressureDropPa ?? 245,
-      fanEfficiency: dto.fanEfficiency ?? 0.6,
+      pipeLengthM: dto.pipeLengthM ?? K.defaultDuctLengthLd,
+      frictionRPaM: dto.frictionRPaM ?? K.defaultUnitFrictionLossR,
+      roughnessBeta: dto.roughnessBeta ?? K.defaultRoughnessFactorBeta,
+      localResistanceSum: dto.localResistanceSum ?? K.defaultLocalResistanceSum,
+      chamberPressureDropPa: dto.chamberPressureDropPa ?? K.defaultChamberPressureLoss,
+      fanEfficiency: dto.fanEfficiency ?? K.defaultFanEfficiency,
     };
 
     // Tính trước khi ghi DB: lỗi tính toán thì không tạo project nào
@@ -58,6 +59,9 @@ export class CalculationsService {
       throw new BadRequestException((e as Error).message);
     }
 
+    // Vận tốc khí thực trong buồng (= L / τ2). Ở chế độ CHECK nó khác giá trị mặc định 0,18.
+    const actualGasVelocityMS = calc.result.lM / calc.result.tau2S;
+
     return this.dataSource.transaction(async (manager) => {
       const project = await manager.save(
         manager.create(DesignProjects, {
@@ -67,7 +71,11 @@ export class CalculationsService {
         }),
       );
       const input = await manager.save(
-        manager.create(DesignInputs, { projectId: project.id, ...inputValues }),
+        manager.create(DesignInputs, {
+          projectId: project.id,
+          ...inputValues,
+          gasVelocityMS: actualGasVelocityMS,
+        }),
       );
       const result = await manager.save(
         manager.create(DesignResults, { projectId: project.id, ...calc.result }),

@@ -3,7 +3,16 @@ import { Type } from 'class-transformer';
 import {
   IsArray, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateNested,
 } from 'class-validator';
-import { ParticleFractionDto } from './calculate-chamber.dto';
+
+export class ParticleFractionDto {
+  @ApiProperty({ example: 50, description: 'Cận trên của dải hạt (μm). Ví dụ dải 40–50 μm thì nhập 50' })
+  @Type(() => Number) @IsNumber() @IsPositive()
+  diameterMicron!: number;
+
+  @ApiProperty({ example: 24, description: 'Phần trăm khối lượng của dải (0–100)' })
+  @Type(() => Number) @IsNumber() @Min(0) @Max(100)
+  weightPercent!: number;
+}
 
 export class CreateCalculationDto {
   @ApiPropertyOptional({ example: 'Phương án buồng lắng bụi số 1' })
@@ -42,7 +51,7 @@ export class CreateCalculationDto {
   @IsOptional() @Type(() => Number) @IsNumber() @IsPositive()
   chamberWidthM?: number;
 
-  @ApiPropertyOptional({ example: 0.18, description: 'Vận tốc khí trong buồng v (m/s)' })
+  @ApiPropertyOptional({ example: 0.18, description: 'Vận tốc khí trong buồng v (m/s). Chỉ dùng ở chế độ DESIGN; chế độ CHECK tự tính từ Q/(B·H)' })
   @IsOptional() @Type(() => Number) @IsNumber() @IsPositive()
   gasVelocityMS?: number;
 
@@ -50,7 +59,7 @@ export class CreateCalculationDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(24)
   operatingHoursPerDay?: number;
 
-  @ApiPropertyOptional({ example: 15, description: 'Vận tốc khí trong ống (m/s)' })
+  @ApiPropertyOptional({ example: 15, description: 'Vận tốc khí trong ống (m/s), thường 10–20' })
   @IsOptional() @Type(() => Number) @IsNumber() @IsPositive()
   pipeVelocityMS?: number;
 
@@ -84,7 +93,7 @@ export class CreateCalculationDto {
 
   @ApiPropertyOptional({
     type: [ParticleFractionDto],
-    description: 'Phân bố cỡ hạt, dùng để tính hiệu suất tổng và nồng độ bụi ra',
+    description: 'Phân bố cỡ hạt (tổng % nên bằng 100), dùng để tính hiệu suất tổng và nồng độ bụi ra',
     example: [{ diameterMicron: 20, weightPercent: 30 }, { diameterMicron: 60, weightPercent: 70 }],
   })
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParticleFractionDto)

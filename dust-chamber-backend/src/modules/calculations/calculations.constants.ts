@@ -5,12 +5,16 @@ export const CALCULATION_CONSTANTS = {
   viscosityTemperatureConstant: 387, // °C
   celsiusToKelvinOffset: 273,
 
-  // Các hằng số mặc định cho đường ống & quạt (Theo mục 2.4 & 2.5 trong tài liệu)
-  defaultUnitFrictionLossR: 4.05, // Pa/m (Tổn thất áp suất trên 1m ống)
-  defaultDuctLengthLd: 32, // m (Chiều dài toàn bộ ống dẫn và ống khói)
-  defaultChamberPressureLoss: 245, // Pa (Tổn thất áp suất trong buồng lắng)
-  defaultRoughnessFactorBeta: 1.0, // Hệ số nhám thành ống
-  defaultFanEfficiency: 0.7, // Hiệu suất quạt hút mặc định (70%)
+  // Giá trị mặc định cho buồng lắng, đường ống và quạt (mục 2.1, 2.4 và 2.5 trong tài liệu)
+  defaultGasVelocityInChamber: 0.18, // m/s (vận tốc khí trong buồng, B7)
+  defaultOperatingHoursPerDay: 16, // giờ/ngày (B23)
+  defaultPipeVelocity: 15, // m/s (khoảng 10 – 20 m/s)
+  defaultUnitFrictionLossR: 4.05, // Pa/m (tổn thất áp suất trên 1 m ống)
+  defaultDuctLengthLd: 32, // m (chiều dài toàn bộ ống dẫn và ống khói)
+  defaultChamberPressureLoss: 245, // Pa (tổn thất áp suất trong buồng lắng)
+  defaultRoughnessFactorBeta: 1.0, // hệ số nhám thành ống
+  defaultLocalResistanceSum: 0, // Σξ; PDF không cho giá trị, người dùng tự nhập
+  defaultFanEfficiency: 0.6, // hiệu suất quạt hút mặc định (60%); PDF không quy định
 } as const;
 
 // Bảng tra hệ số α theo nhiệt độ (Bảng 2.1 trong tài liệu)
@@ -27,11 +31,4 @@ export const TEMPERATURE_ALPHA_TABLE: { temp: number; alpha: number }[] = [
   { temp: 50, alpha: 0.94 },
   { temp: 60, alpha: 0.93 },
   { temp: 70, alpha: 0.92 },
-];
-
-export const CALCULATION_WARNINGS: string[] = [
-  'Stokes settling velocity assumes the particle is in the applicable low-Reynolds-number regime.',
-  'The gas-property relations are approximations transcribed from the analyzed PDF and require technical review.',
-  'Collection efficiency uses the idealized settling-chamber relation and does not model turbulence, re-entrainment, or non-uniform flow.',
-  'This calculation is an educational estimate, not a certified engineering design.',
 ];

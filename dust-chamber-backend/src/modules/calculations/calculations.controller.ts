@@ -27,7 +27,7 @@ import {
 import { JwtAuthGuard } from '../../commons/guards/jwt-auth.guard';
 
 @ApiTags('Calculations')
-@ApiBearerAuth('access-token') // phải khớp tên trong main.ts
+@ApiBearerAuth() // phải khớp tên trong main.ts
 @UseGuards(JwtAuthGuard)
 @Controller('calculations')
 export class CalculationsController {

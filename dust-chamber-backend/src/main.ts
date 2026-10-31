@@ -38,7 +38,6 @@ async function bootstrap() {
         bearerFormat: "JWT",
         in: "header",
       },
-      "access-token",
     )
     .addTag("nestjs")
     .build();

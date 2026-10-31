@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import HistoryDetailModal from '../History/HistoryDetailModal';
 import EditUserModal from './EditUserModal';
 import AddUserModal from './AddUserModal';
+import UserHistoryListModal from './UserHistoryListModal';
 
 export interface UserItem {
     id: number | string;
@@ -21,8 +21,8 @@ const UserManagementPage = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedEditUser, setSelectedEditUser] = useState<UserItem | null>(null);
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedHistoryId, setSelectedHistoryId] = useState<number | string | null>(null);
+    const [isUserHistoryListModalOpen, setIsUserHistoryListModalOpen] = useState(false);
+    const [selectedUserIdForHistory, setSelectedUserIdForHistory] = useState<number | string | null>(null);
 
     const fetchUsers = async () => {
         try {
@@ -57,9 +57,9 @@ const UserManagementPage = () => {
         }, 0);
     }, []);
 
-    const handleViewHistory = (id: string | number) => {
-        setSelectedHistoryId(id);
-        setIsModalOpen(true);
+    const handleViewHistory = (userId: string | number) => {
+        setSelectedUserIdForHistory(userId);
+        setIsUserHistoryListModalOpen(true);
     };
 
     const handleEditInfo = (user: UserItem) => {
@@ -72,7 +72,7 @@ const UserManagementPage = () => {
         if (!window.confirm(`Bạn có chắc chắn muốn ${actionText} người dùng này?`)) return;
 
         try {
-            const token = localStorage.getItem('accessToken');
+            const token = sessionStorage.getItem('accessToken');
             const response = await fetch(`http://localhost:3001/api/users/lock/${id}`, {
                 method: 'PATCH',
                 headers: {
@@ -223,7 +223,6 @@ const UserManagementPage = () => {
                 </table>
             </div>
 
-            {/* HIỂN THỊ MODAL THÊM MỚI */}
             {isAddModalOpen && (
                 <AddUserModal
                     onClose={() => setIsAddModalOpen(false)}
@@ -233,10 +232,10 @@ const UserManagementPage = () => {
                 />
             )}
 
-            {isModalOpen && (
-                <HistoryDetailModal
-                    id={selectedHistoryId}
-                    onClose={() => setIsModalOpen(false)}
+            {isUserHistoryListModalOpen && (
+                <UserHistoryListModal
+                    userId={selectedUserIdForHistory}
+                    onClose={() => setIsUserHistoryListModalOpen(false)}
                 />
             )}
 

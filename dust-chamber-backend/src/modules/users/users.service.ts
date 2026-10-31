@@ -83,20 +83,15 @@ export class UsersService {
 
   async remove(id: number, currentUser: any) {
     if (currentUser.role !== "admin" && currentUser.id !== id) {
-      throw new ForbiddenException(
-        "Bạn không có quyền khóa tài khoản của người khác.",
-      );
+      throw new ForbiddenException("Bạn không có quyền thay đổi trạng thái tài khoản của người khác.");
     }
 
     const user = await this.findOne(id);
 
-    if (user.isActive === false) {
-      throw new BadRequestException("Tài khoản đã bị vô hiệu hoá trước đó");
-    }
+    user.isActive = !user.isActive;
 
-    user.isActive = false;
-    const deletedUser = await this.usersRepository.save(user);
-    const { passwordHash: _, ...result } = deletedUser;
+    const updatedUser = await this.usersRepository.save(user);
+    const { passwordHash: _, ...result } = updatedUser;
     return result;
   }
 

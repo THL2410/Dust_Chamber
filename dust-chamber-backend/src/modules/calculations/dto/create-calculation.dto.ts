@@ -5,6 +5,10 @@ import {
 } from 'class-validator';
 
 export class ParticleFractionDto {
+  @ApiPropertyOptional({ example: 40, description: 'Cận dưới của dải hạt (μm). Bỏ trống thì lấy cận trên của dải liền trước (dải đầu tiên: 0)' })
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  diameterFromMicron?: number;
+
   @ApiProperty({ example: 50, description: 'Cận trên của dải hạt (μm). Ví dụ dải 40–50 μm thì nhập 50' })
   @Type(() => Number) @IsNumber() @IsPositive()
   diameterMicron!: number;
@@ -18,6 +22,10 @@ export class CreateCalculationDto {
   @ApiPropertyOptional({ example: 'Phương án buồng lắng bụi số 1' })
   @IsOptional() @IsString()
   name?: string;
+
+  @ApiPropertyOptional({ example: 'Phương án thử nghiệm', description: 'Ghi chú cho phương án' })
+  @IsOptional() @IsString()
+  note?: string;
 
   @ApiProperty({ example: 5000, description: 'Lưu lượng khí Q (m³/h)' })
   @Type(() => Number) @IsNumber() @IsPositive()

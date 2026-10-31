@@ -14,6 +14,10 @@ export const CALCULATION_CONSTANTS = {
   defaultChamberPressureLoss: 245, // Pa (tổn thất áp suất trong buồng lắng)
   defaultRoughnessFactorBeta: 1.0, // hệ số nhám thành ống
   defaultLocalResistanceSum: 0, // Σξ; PDF không cho giá trị, người dùng tự nhập
+  // Dải hạt chưa đủ d_min mà hiệu suất lắng < ngưỡng này thì xếp vào OTHER_DEVICE (cần thiết bị lọc khác)
+  // Ngưỡng này là quy ước của dự án, PDF không quy định.
+  partialCaptureMinEfficiencyPercent: 50,
+
   defaultFanEfficiency: 0.6, // hiệu suất quạt hút mặc định (60%); PDF không quy định
 } as const;
 

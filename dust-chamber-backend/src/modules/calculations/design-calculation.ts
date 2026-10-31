@@ -26,12 +26,26 @@ export interface DesignCalcInput {
   localResistanceSum: number;
   chamberPressureDropPa: number;
   fanEfficiency: number;
-  fractions?: { diameterMicron: number; weightPercent: number }[];
+  fractions?: { diameterFromMicron?: number; diameterMicron: number; weightPercent: number }[];
+}
+
+/** Kết quả tính riêng cho một dải hạt (tương ứng bảng dust_fractions + fraction_results) */
+export interface FractionCalcResult {
+  dFromUm: number;
+  dToUm: number;
+  massPercent: number;
+  dRepUm: number; // đường kính đại diện = cận trên của dải
+  settlingVelocityMS: number; // B13
+  efficiencyPercent: number; // B14 (100 nếu d >= d_limit)
+  inletConcGM3: number; // Cb × % khối lượng
+  outletConcGM3: number; // inlet × (1 − η)
+  regime: 'FULL' | 'PARTIAL' | 'OTHER_DEVICE';
 }
 
 export interface DesignCalcOutput {
   mode: 'CHECK' | 'DESIGN';
   warnings: string[];
+  fractionResults: FractionCalcResult[];
   // khớp 1-1 với cột của entity DesignResults (trừ projectId)
   result: {
     hM: number; lM: number; bM: number;
@@ -176,18 +190,38 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   const gsKgH = gvKgH * (1 - yvPercent / 100); // B17
   const qsM3H = gsKgH / rho; // B18
 
-  // Bụi thu được theo từng dải (B20-B22); diameterMicron = cận trên của dải
+  // Kết quả theo từng dải (B13, B14, B20-B21); diameterMicron = cận trên của dải
   let m1 = 0;
   let m2 = 0;
   const fr = i.fractions ?? [];
+  const fractionResults: FractionCalcResult[] = [];
+  let prevTo = 0;
   for (const f of fr) {
+    const dTo = f.diameterMicron;
+    const dFrom = f.diameterFromMicron ?? (prevTo < dTo ? prevTo : 0);
+    prevTo = dTo;
+    const vts = settle(dTo);
+    const full = dTo >= dLimit;
+    const eta = full ? 1 : Math.min(1, (vts * blM2) / Q); // B14
+    const inlet = (i.dustConcentrationGM3 * f.weightPercent) / 100;
     const mass = (f.weightPercent / 100) * gbKgH;
-    if (f.diameterMicron >= dLimit) {
-      m1 += mass; // lắng 100 %
-    } else {
-      const eta = Math.min(1, (settle(f.diameterMicron) * blM2) / Q); // B14
-      m2 += mass * eta;
-    }
+    if (full) m1 += mass; // lắng 100 %
+    else m2 += mass * eta;
+    fractionResults.push({
+      dFromUm: dFrom,
+      dToUm: dTo,
+      massPercent: f.weightPercent,
+      dRepUm: dTo,
+      settlingVelocityMS: vts,
+      efficiencyPercent: eta * 100,
+      inletConcGM3: inlet,
+      outletConcGM3: inlet * (1 - eta),
+      regime: full
+        ? 'FULL'
+        : eta * 100 >= C.partialCaptureMinEfficiencyPercent
+          ? 'PARTIAL'
+          : 'OTHER_DEVICE',
+    });
   }
   if (!fr.length) {
     warnings.push('Chưa nhập phân bố cỡ hạt nên lượng bụi thu và hiệu suất tổng = 0.');
@@ -226,6 +260,7 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   return {
     mode,
     warnings,
+    fractionResults,
     result: {
       hM: H, lM: L, bM: B, muPaS: mu, rhoGasKgM3: rho, uMS: uSettle,
       tau1S, tau2S, lMinM, blM2, dMinCalcUm, dLimitUm: dLimit, isRetained,

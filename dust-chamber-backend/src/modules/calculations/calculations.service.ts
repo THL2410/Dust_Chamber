@@ -66,6 +66,7 @@ export class CalculationsService {
       const project = await manager.save(
         manager.create(DesignProjects, {
           name: dto.name || 'Phương án buồng lắng bụi',
+          note: dto.note ?? null,
           userId,
           mode: calc.mode,
         }),
@@ -80,6 +81,25 @@ export class CalculationsService {
       const result = await manager.save(
         manager.create(DesignResults, { projectId: project.id, ...calc.result }),
       );
+      // Lưu từng dải hạt: dust_fractions (đầu vào) và fraction_results (kết quả của dải)
+      const fractions: unknown[] = [];
+      for (const [idx, f] of calc.fractionResults.entries()) {
+        const [row] = await manager.query(
+          `INSERT INTO dust_fractions (project_id, d_from_um, d_to_um, mass_percent, sort_order)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [project.id, f.dFromUm, f.dToUm, f.massPercent, idx + 1],
+        );
+        await manager.query(
+          `INSERT INTO fraction_results
+             (fraction_id, d_rep_um, settling_velocity_m_s, efficiency_percent,
+              inlet_conc_g_m3, outlet_conc_g_m3, regime)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [row.id, f.dRepUm, f.settlingVelocityMS, f.efficiencyPercent,
+           f.inletConcGM3, f.outletConcGM3, f.regime],
+        );
+        fractions.push({ id: row.id, ...f });
+      }
+
       return {
         message: 'Tính toán và lưu phương án thành công!',
         projectId: project.id,
@@ -87,6 +107,7 @@ export class CalculationsService {
         warnings: calc.warnings,
         input,
         result,
+        fractions,
       };
     });
   }

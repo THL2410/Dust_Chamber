@@ -39,7 +39,38 @@ export class CalculationsController {
   @ApiOperation({
     summary: 'Tính toán và lưu phương án thiết kế buồng lắng bụi',
   })
-  @ApiBody({ type: CreateCalculationDto })
+  @ApiBody({
+    type: CreateCalculationDto,
+    examples: {
+      vd2Check: {
+        summary: 'Ví dụ 2 trong PDF (chế độ CHECK)',
+        description:
+          'Cho sẵn H, L, B: tính d_min, hiệu suất và nồng độ bụi ra. Kết quả kỳ vọng: dLimitUm = 50, etaTotalPercent ≈ 72,05.',
+        value: {
+          name: 'Ví dụ 2 - buồng lắng bụi (CHECK)',
+          flowRateM3H: 20000,
+          temperatureC: 40,
+          dustConcentrationGM3: 15,
+          dustDensityKgM3: 3000,
+          chamberHeightM: 2,
+          chamberLengthM: 8,
+          chamberWidthM: 4,
+          localResistanceSum: 2.5,
+          particleFractions: [
+            { diameterMicron: 5, weightPercent: 10 },
+            { diameterMicron: 10, weightPercent: 6.5 },
+            { diameterMicron: 20, weightPercent: 9.5 },
+            { diameterMicron: 30, weightPercent: 5 },
+            { diameterMicron: 40, weightPercent: 7 },
+            { diameterMicron: 50, weightPercent: 24 },
+            { diameterMicron: 60, weightPercent: 21 },
+            { diameterMicron: 70, weightPercent: 10 },
+            { diameterMicron: 80, weightPercent: 7 },
+          ],
+        },
+      },
+    },
+  })
   async runDesign(
     @Body() dto: CreateCalculationDto,
     @CurrentUser() user: JwtUser,

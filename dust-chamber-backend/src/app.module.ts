@@ -7,6 +7,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { dbOptions, load } from "./config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { HistoryModule } from './modules/history/history.module';
+import { CalculationsModule } from './modules/calculations/calculations.module'; // Thêm module tính toán của bạn
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { HistoryModule } from './modules/history/history.module';
     UsersModule,
     AuthModule,
     HistoryModule,
+    CalculationsModule, // Đăng ký module tính toán vào đây
   ],
   controllers: [AppController],
   providers: [AppService],

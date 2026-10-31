@@ -97,7 +97,24 @@ export class CalculationsService {
           [row.id, f.dRepUm, f.settlingVelocityMS, f.efficiencyPercent,
            f.inletConcGM3, f.outletConcGM3, f.regime],
         );
-        fractions.push({ id: row.id, ...f });
+        // Dải buồng lắng không xử lý nổi: gợi ý thiết bị lọc có khoảng cỡ hạt phủ lên dải này
+        let collectors: unknown[] = [];
+        if (f.regime === 'OTHER_DEVICE') {
+          collectors = await manager.query(
+            `WITH ins AS (
+               INSERT INTO fraction_collector_suggestions (fraction_id, collector_id)
+               SELECT $1, c.id
+               FROM dust_collectors c
+               WHERE c.is_active AND c.min_diameter_um < $3 AND c.max_diameter_um > $2
+               RETURNING collector_id
+             )
+             SELECT c.id, c.code, c.name, c.typical_efficiency AS "typicalEfficiency"
+             FROM ins JOIN dust_collectors c ON c.id = ins.collector_id
+             ORDER BY c.id`,
+            [row.id, f.dFromUm, f.dToUm],
+          );
+        }
+        fractions.push({ id: row.id, ...f, collectors });
       }
 
       return {

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 export interface FractionData {
     d_from_um: number;
@@ -49,7 +51,8 @@ const InputSection = ({ data }: { data?: Record<string, number | string> }) => {
                     <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
                         <span className="text-gray-600 font-medium text-sm">{field.label}</span>
                         <span className="text-gray-900 font-semibold">
-                            {Number(field.value).toLocaleString('vi-VN')} <span className="text-xs text-gray-500">{field.unit}</span>
+                            {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
+                            <span className="text-xs text-gray-500 ml-1">{field.unit}</span>
                         </span>
                     </div>
                 )
@@ -186,6 +189,7 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
     const [activeTab, setActiveTab] = useState<'input' | 'result' | 'fraction'>(initialTab);
     const [data, setData] = useState<DetailResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -195,9 +199,7 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
             try {
                 const token = sessionStorage.getItem('accessToken');
                 const response = await fetch(`http://localhost:3001/api/history/${id}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) throw new Error("Lỗi tải chi tiết");
 
@@ -213,83 +215,190 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
         fetchDetail();
     }, [id]);
 
+    const handleExportPDF = () => {
+        setIsExporting(true);
+
+        setTimeout(async () => {
+            const element = document.getElementById('pdf-content');
+            if (element) {
+                try {
+                    const imgData = await toPng(element, {
+                        pixelRatio: 2,
+                        backgroundColor: '#ffffff',
+                        style: {
+                            background: '#ffffff',
+                            margin: '0',
+                            padding: '20px'
+                        }
+                    });
+
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pageHeight = pdf.internal.pageSize.getHeight();
+
+                    const elWidth = element.offsetWidth;
+                    const elHeight = element.offsetHeight;
+                    const imgHeight = (elHeight * pdfWidth) / elWidth;
+
+                    let heightLeft = imgHeight;
+                    let position = 0;
+
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pageHeight;
+
+                    while (heightLeft > 0) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+
+                    let tabName = '';
+                    if (activeTab === 'input') tabName = 'Thong_So_Dau_Vao';
+                    if (activeTab === 'result') tabName = 'Ket_Qua_Tinh_Toan';
+                    if (activeTab === 'fraction') tabName = 'Ket_Qua_Dai_Bui';
+
+                    pdf.save(`Du_An_${id}_${tabName}.pdf`);
+                } catch (error) {
+                    console.error('Lỗi khi tạo PDF:', error);
+                    alert('Lỗi xuất PDF. Vui lòng thử lại sau.');
+                }
+            }
+            setIsExporting(false);
+        }, 500);
+    };
+
     if (!id) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity">
-            <div className="bg-white rounded-xl shadow-2xl w-11/12 max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-fade-in-up">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity ${isExporting ? 'overflow-y-auto items-start py-10' : ''}`}>
 
-                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800">
-                            {data?.project?.name || 'Chi tiết dự án'}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                            Mã dự án: #{id} | Chế độ: <span className="font-semibold text-blue-600">{data?.project?.mode}</span>
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-2"
-                    >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
+            <div className={`bg-white rounded-xl shadow-2xl w-11/12 max-w-5xl flex flex-col transition-all ${isExporting ? 'h-auto' : 'h-[85vh] overflow-hidden animate-fade-in-up'}`}>
 
-                <div className="flex px-6 border-b border-gray-200 bg-white">
-                    <button
-                        onClick={() => setActiveTab('input')}
-                        className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-                            activeTab === 'input' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        📥 THÔNG SỐ ĐẦU VÀO
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('result')}
-                        className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-                            activeTab === 'result' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        📊 KẾT QUẢ TÍNH TOÁN
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('fraction')}
-                        className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-                            activeTab === 'fraction' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        🌫️ KẾT QUẢ DẢI BỤI
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 bg-white">
-                    {loading ? (
-                        <div className="flex justify-center items-center h-full">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                            <span className="ml-3 text-gray-600">Đang tải dữ liệu...</span>
+                {!isExporting && (
+                    <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                        <div>
+                            <h3 className="text-xl font-bold text-gray-800">
+                                {data?.project?.name || 'Chi tiết dự án'}
+                            </h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Mã dự án: #{id} | Chế độ: <span className="font-semibold text-blue-600">{data?.project?.mode}</span>
+                            </p>
                         </div>
-                    ) : !data ? (
-                        <div className="text-center text-red-500 mt-10">Không tìm thấy dữ liệu cho dự án này.</div>
-                    ) : (
-                        <>
-                            {activeTab === 'input' && <InputSection data={data.input} />}
-                            {activeTab === 'result' && <ResultSection data={data.result} />}
-                            {activeTab === 'fraction' && <FractionSection fractions={data.fractions} />}
-                        </>
+                        <div className="flex space-x-3 items-center">
+                            <button
+                                onClick={handleExportPDF}
+                                disabled={loading || !data}
+                                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition flex items-center shadow-sm disabled:opacity-50"
+                            >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Xuất PDF
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-gray-100 rounded"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {!isExporting && (
+                    <div className="flex px-6 border-b border-gray-200 bg-white">
+                        <button
+                            onClick={() => setActiveTab('input')}
+                            className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
+                                activeTab === 'input' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            📥 THÔNG SỐ ĐẦU VÀO
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('result')}
+                            className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
+                                activeTab === 'result' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            📊 KẾT QUẢ TÍNH TOÁN
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('fraction')}
+                            className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
+                                activeTab === 'fraction' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            🌫️ KẾT QUẢ DẢI BỤI
+                        </button>
+                    </div>
+                )}
+
+                <div id="pdf-content" className={`bg-white ${isExporting ? 'h-auto pb-10 select-none' : 'flex-1 overflow-y-auto'}`}>
+
+                    {isExporting && data && (
+                        <div className="px-8 py-6 mb-4 border-b-4 border-blue-600 bg-white text-center">
+                            <h2 className="text-3xl font-bold text-gray-800 uppercase tracking-wide">
+                                {activeTab === 'input' && 'BÁO CÁO THÔNG SỐ ĐẦU VÀO'}
+                                {activeTab === 'result' && 'BÁO CÁO KẾT QUẢ TÍNH TOÁN'}
+                                {activeTab === 'fraction' && 'BÁO CÁO KẾT QUẢ TỪNG DẢI BỤI'}
+                            </h2>
+                            <p className="text-lg text-blue-700 font-semibold mt-2">
+                                Tên dự án: {data.project?.name}
+                            </p>
+                            <p className="text-gray-500 mt-1">Mã tham chiếu: #{id} | Chế độ: {data.project?.mode}</p>
+                        </div>
                     )}
+
+                    <div className="p-6">
+                        {loading ? (
+                            <div className="flex justify-center items-center h-full">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                                <span className="ml-3 text-gray-600">Đang tải dữ liệu...</span>
+                            </div>
+                        ) : !data ? (
+                            <div className="text-center text-red-500 mt-10">Không tìm thấy dữ liệu cho dự án này.</div>
+                        ) : (
+                            <div className={`space-y-8 ${isExporting ? 'px-4' : ''}`}>
+
+                                {activeTab === 'input' && (
+                                    <div className="break-inside-avoid">
+                                        {isExporting && <h4 className="text-xl font-bold mb-4 text-indigo-700 border-b-2 border-indigo-100 pb-2">THÔNG SỐ ĐẦU VÀO</h4>}
+                                        <InputSection data={data.input} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'result' && (
+                                    <div className="break-inside-avoid">
+                                        {isExporting && <h4 className="text-xl font-bold mb-4 text-emerald-700 border-b-2 border-emerald-100 pb-2">KẾT QUẢ TÍNH TOÁN</h4>}
+                                        <ResultSection data={data.result} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'fraction' && (
+                                    <div className="break-inside-avoid">
+                                        {isExporting && <h4 className="text-xl font-bold mb-4 text-amber-700 border-b-2 border-amber-100 pb-2">KẾT QUẢ TỪNG DẢI BỤI</h4>}
+                                        <FractionSection fractions={data.fractions} />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 bg-gray-200 text-gray-800 font-medium rounded hover:bg-gray-300 transition"
-                    >
-                        Đóng
-                    </button>
-                </div>
+                {!isExporting && (
+                    <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2 bg-gray-200 text-gray-800 font-medium rounded hover:bg-gray-300 transition"
+                        >
+                            Đóng
+                        </button>
+                    </div>
+                )}
 
             </div>
         </div>

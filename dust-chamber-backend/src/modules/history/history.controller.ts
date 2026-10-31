@@ -6,7 +6,6 @@ import {
   ApiOperation, ApiTags,
 } from "@nestjs/swagger";
 import { CurrentUser, JwtUser } from "commons/decorators/current-user.decorator";
-// import { CreateHistoryDto } from "./dto/create-history.dto";
 import { HistoryQueryDto } from "./dto/history-query.dto";
 import { HistoryService } from "./history.service";
 import {Roles} from "commons/decorators/roles.decorator";
@@ -37,11 +36,6 @@ export class HistoryController {
     return this.historyService.findByUser(userId, query, user);
   }
 
-  // @Post()
-  // @ApiOperation({ summary: "Lưu thông số và kết quả tính toán (gắn với người dùng đang đăng nhập)" })
-  // create(@Body() dto: CreateHistoryDto, @CurrentUser() user: JwtUser) {
-  //   return this.historyService.create(dto, user);
-  // }
 
   @Get(":id")
   @ApiOperation({ summary: "Xem một lịch sử theo id" })
@@ -51,14 +45,6 @@ export class HistoryController {
   findOne(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: JwtUser) {
     return this.historyService.findOne(id, user);
   }
-
-  // @Get(":id/detail")
-  // @ApiOperation({ summary: "Xem chi tiết đầy đủ một lịch sử (thông số, kết quả, các dải bụi)" })
-  // @ApiNotFoundResponse({ description: "Không tìm thấy lịch sử" })
-  // @ApiForbiddenResponse({ description: "Không có quyền xem lịch sử của người khác" })
-  // findDetail(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: JwtUser) {
-  //   return this.historyService.findDetail(id, user);
-  // }
 
   @Delete(":id")
   @ApiOperation({ summary: "Xóa lịch sử (xóa kèm thông số, kết quả, dải bụi)" })

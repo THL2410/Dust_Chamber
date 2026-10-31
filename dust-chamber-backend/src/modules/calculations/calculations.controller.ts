@@ -80,35 +80,35 @@ export class CalculationsController {
     return this.calcService.calculateAndSave(userId, dto);
   }
 
-  @Get('history')
-  @ApiOperation({
-    summary: 'Lấy danh sách lịch sử tính toán của người dùng',
-  })
-  async getHistory(@CurrentUser() user: JwtUser) {
-    const userId = Number(user.id);
-
-    return this.calcService.findAllByUser(userId);
-  }
-
-  @Get('history/:id')
-  @ApiOperation({
-    summary: 'Xem chi tiết một phương án tính toán theo ID',
-  })
-  async getDetail(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: JwtUser,
-  ) {
-    return this.calcService.findOne(id, Number(user.id));
-  }
-
-  @Delete('history/:id')
-  @ApiOperation({
-    summary: 'Xóa lịch sử tính toán theo ID',
-  })
-  async deleteHistory(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: JwtUser,
-  ) {
-    return this.calcService.remove(id, Number(user.id));
-  }
+  // @Get('history')
+  // @ApiOperation({
+  //   summary: 'Lấy danh sách lịch sử tính toán của người dùng',
+  // })
+  // async getHistory(@CurrentUser() user: JwtUser) {
+  //   const userId = Number(user.id);
+  //
+  //   return this.calcService.findAllByUser(userId);
+  // }
+  //
+  // @Get('history/:id')
+  // @ApiOperation({
+  //   summary: 'Xem chi tiết một phương án tính toán theo ID',
+  // })
+  // async getDetail(
+  //   @Param('id', ParseIntPipe) id: number,
+  //   @CurrentUser() user: JwtUser,
+  // ) {
+  //   return this.calcService.findOne(id, Number(user.id));
+  // }
+  //
+  // @Delete('history/:id')
+  // @ApiOperation({
+  //   summary: 'Xóa lịch sử tính toán theo ID',
+  // })
+  // async deleteHistory(
+  //   @Param('id', ParseIntPipe) id: number,
+  //   @CurrentUser() user: JwtUser,
+  // ) {
+  //   return this.calcService.remove(id, Number(user.id));
+  // }
 }

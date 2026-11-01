@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import HistoryPage from './components/History/HistoryPage';
-import UserManagementPage from './components/UserManager/UserManagementPage';
 import LoginPage from './components/Auth/LoginPage';
+import UserManagementPage from './components/UserManager/UserManagementPage.tsx';
+import CalculationPage from './components/Calculation/CalculationPage';
 import './index.css';
 
 const getUserRole = () => {
@@ -75,6 +76,13 @@ const Navbar = () => {
                     Đăng xuất
                 </button>
             </div>
+            <div className="max-w-7xl mx-auto flex flex-wrap gap-4">
+                {/* Các liên kết điều hướng */}
+                <Link to="/calculate" className={getNavClass('/calculate')}>Tính toán</Link>
+                <Link to="/history" className={getNavClass('/history')}>Lịch sử</Link>
+                <Link to="/users" className={getNavClass('/users')}>Quản lý User</Link>
+                <Link to="/login" className={getNavClass('/login')}>Đăng xuất</Link>
+            </div>
         </nav>
     );
 };
@@ -131,6 +139,22 @@ function App() {
                     />
                 </Routes>
             </MainLayout>
+        <BrowserRouter>
+            <div className="min-h-screen bg-gray-100">
+                {/* Thanh Navbar sẽ luôn hiển thị ở mọi trang */}
+                <Navbar />
+
+                {/* Nội dung bên dưới Navbar sẽ thay đổi tùy theo URL */}
+                <div className="p-4">
+                    <Routes>
+                        <Route path="/" element={<Navigate to="/calculate" replace />} />
+                        <Route path="/calculate" element={<CalculationPage />} />
+                        <Route path="/history" element={<HistoryPage />} />
+                        <Route path="/users" element={<UserManagementPage />} />
+                    </Routes>
+                </div>
+            </div>
+        </BrowserRouter>
         </BrowserRouter>
     );
 }

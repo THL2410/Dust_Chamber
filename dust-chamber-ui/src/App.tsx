@@ -36,7 +36,7 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
     }
 
     if (!allowedRoles.includes(role)) {
-        return <Navigate to={role === 'Admin' ? '/users' : '/history'} replace />;
+        return <Navigate to={role === 'Admin' ? '/users' : '/calculate'} replace />;
     }
 
     return <>{children}</>;
@@ -62,6 +62,7 @@ const Navbar = () => {
         <nav className="bg-gray-800 p-4 shadow-md">
             <div className="max-w-7xl mx-auto flex justify-between items-center">
                 <div className="flex gap-4">
+                    <Link to="/calculate" className={getNavClass('/calculate')}>Tính toán</Link>
                     <Link to="/history" className={getNavClass('/history')}>Lịch sử</Link>
 
                     {role === 'Admin' && (
@@ -75,13 +76,6 @@ const Navbar = () => {
                 >
                     Đăng xuất
                 </button>
-            </div>
-            <div className="max-w-7xl mx-auto flex flex-wrap gap-4">
-                {/* Các liên kết điều hướng */}
-                <Link to="/calculate" className={getNavClass('/calculate')}>Tính toán</Link>
-                <Link to="/history" className={getNavClass('/history')}>Lịch sử</Link>
-                <Link to="/users" className={getNavClass('/users')}>Quản lý User</Link>
-                <Link to="/login" className={getNavClass('/login')}>Đăng xuất</Link>
             </div>
         </nav>
     );
@@ -109,11 +103,14 @@ function App() {
         <BrowserRouter>
             <MainLayout>
                 <Routes>
+                    <Route path="/" element={<Navigate to="/calculate" replace />} />
+                    <Route path="/login" element={<LoginPage />} />
+
                     <Route
-                        path="/users"
+                        path="/calculate"
                         element={
-                            <ProtectedRoute allowedRoles={['Admin']}>
-                                <UserManagementPage />
+                            <ProtectedRoute allowedRoles={['Admin', 'User']}>
+                                <CalculationPage />
                             </ProtectedRoute>
                         }
                     />
@@ -124,37 +121,25 @@ function App() {
                                 <HistoryPage />
                             </ProtectedRoute>
                         }
-                    />git sta
+                    />
                     <Route
-                        path="/login"
-                        element={<LoginPage />}
+                        path="/users"
+                        element={
+                            <ProtectedRoute allowedRoles={['Admin']}>
+                                <UserManagementPage />
+                            </ProtectedRoute>
+                        }
                     />
                     <Route
                         path="*"
                         element={
                             getUserRole() === 'Admin'
                                 ? <Navigate to="/users" replace />
-                                : <Navigate to="/history" replace />
+                                : <Navigate to="/calculate" replace />
                         }
                     />
                 </Routes>
             </MainLayout>
-        <BrowserRouter>
-            <div className="min-h-screen bg-gray-100">
-                {/* Thanh Navbar sẽ luôn hiển thị ở mọi trang */}
-                <Navbar />
-
-                {/* Nội dung bên dưới Navbar sẽ thay đổi tùy theo URL */}
-                <div className="p-4">
-                    <Routes>
-                        <Route path="/" element={<Navigate to="/calculate" replace />} />
-                        <Route path="/calculate" element={<CalculationPage />} />
-                        <Route path="/history" element={<HistoryPage />} />
-                        <Route path="/users" element={<UserManagementPage />} />
-                    </Routes>
-                </div>
-            </div>
-        </BrowserRouter>
         </BrowserRouter>
     );
 }

@@ -1,11 +1,13 @@
 import { useState, type SubmitEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
-    getMockCalculation,
+    CalculationApiError,
     initialValues,
-    toCalculationInput,
+    submitCalculation,
+    toCalculationPayload,
     validateCalculation,
     type CalculationFormValues,
-    type CalculationResult,
+    type CalculationApiResponse,
     type DesignMode,
     type NumericField,
 } from './calculation';
@@ -72,14 +74,21 @@ export default function CalculationPage() {
     const [submitted, setSubmitted] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<CalculationResult | null>(null);
+    const [result, setResult] = useState<CalculationApiResponse | null>(null);
     const [requestError, setRequestError] = useState('');
+    const [loginRequired, setLoginRequired] = useState(false);
+    const [nextFractionId, setNextFractionId] = useState(2);
     const errors = validateCalculation(values);
+    const fractionTotal = values.particleFractions.reduce(
+        (total, fraction) => total + (Number(fraction.weightPercent) || 0),
+        0,
+    );
 
     const changeField = (key: NumericField, value: string) => {
         setValues((current) => ({ ...current, [key]: value }));
         setResult(null);
         setRequestError('');
+        setLoginRequired(false);
     };
 
     const changeMode = (mode: DesignMode) => {
@@ -88,6 +97,47 @@ export default function CalculationPage() {
         setSubmitted(false);
         setResult(null);
         setRequestError('');
+        setLoginRequired(false);
+    };
+
+    const changeFraction = (id: number, field: 'diameterFromMicron' | 'diameterMicron' | 'weightPercent', value: string) => {
+        setValues((current) => ({
+            ...current,
+            particleFractions: current.particleFractions.map((fraction) =>
+                fraction.id === id ? { ...fraction, [field]: value } : fraction,
+            ),
+        }));
+        setResult(null);
+        setRequestError('');
+        setLoginRequired(false);
+    };
+
+    const addFraction = () => {
+        const id = nextFractionId;
+        setNextFractionId((current) => current + 1);
+        setValues((current) => {
+            const previousUpper = current.particleFractions.at(-1)?.diameterMicron ?? '';
+            return {
+                ...current,
+                particleFractions: [
+                    ...current.particleFractions,
+                    { id, diameterFromMicron: previousUpper, diameterMicron: '', weightPercent: '' },
+                ],
+            };
+        });
+        setResult(null);
+        setRequestError('');
+        setLoginRequired(false);
+    };
+
+    const removeFraction = (id: number) => {
+        setValues((current) => ({
+            ...current,
+            particleFractions: current.particleFractions.filter((fraction) => fraction.id !== id),
+        }));
+        setResult(null);
+        setRequestError('');
+        setLoginRequired(false);
     };
 
     const renderFields = (fields: FieldConfig[]) => fields.map(({ key, label, unit, hint }) => {
@@ -127,18 +177,31 @@ export default function CalculationPage() {
         setSubmitted(true);
         setResult(null);
         setRequestError('');
+        setLoginRequired(false);
 
         if (Object.keys(errors).length > 0) {
             if (advancedFields.some(({ key }) => errors[key])) setAdvancedOpen(true);
             return;
         }
 
+        const accessToken = sessionStorage.getItem('accessToken');
+        if (!accessToken) {
+            setRequestError('Bạn cần đăng nhập để gửi yêu cầu tính toán.');
+            setLoginRequired(true);
+            return;
+        }
+
         setLoading(true);
         try {
-            const input = toCalculationInput(values);
-            setResult(await getMockCalculation(input));
-        } catch {
-            setRequestError('Không thể tải kết quả minh họa. Vui lòng thử lại.');
+            const payload = toCalculationPayload(values);
+            setResult(await submitCalculation(payload, accessToken));
+        } catch (error) {
+            if (error instanceof CalculationApiError) {
+                setRequestError(error.message);
+                setLoginRequired(error.status === 401);
+            } else {
+                setRequestError('Đã xảy ra lỗi khi tính toán. Vui lòng thử lại.');
+            }
         } finally {
             setLoading(false);
         }
@@ -150,7 +213,7 @@ export default function CalculationPage() {
                 <p className="text-sm font-semibold uppercase tracking-widest text-sky-300">Buồng lắng bụi</p>
                 <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Nhập thông số thiết kế</h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
-                    Chọn chế độ, điền thông số và xem giao diện kết quả. Kết quả hiện tại chỉ là dữ liệu minh họa.
+                    Chọn chế độ, điền thông số và gửi yêu cầu tính toán đến máy chủ.
                 </p>
             </header>
 
@@ -183,6 +246,102 @@ export default function CalculationPage() {
                             <h2 id="gas-title" className="text-lg font-bold text-slate-900">Khí và bụi</h2>
                             <p className="mt-1 text-sm text-slate-500">Thông số của dòng khí đầu vào.</p>
                             <div className="mt-4 grid gap-4 sm:grid-cols-2">{renderFields(gasFields)}</div>
+                        </section>
+
+                        <section aria-labelledby="fractions-title" className="border-t border-slate-200 pt-6">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h2 id="fractions-title" className="text-lg font-bold text-slate-900">Phân bố cỡ hạt bụi</h2>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                        Nhập cận trên và tỷ lệ khối lượng từng dải. Tổng tỷ lệ cần bằng 100%; cận dưới có thể để trống để nối tiếp dải trước.
+                                    </p>
+                                </div>
+                                <p className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold ${Math.abs(fractionTotal - 100) <= 0.01 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
+                                    Tổng: {fractionTotal.toLocaleString('vi-VN')}%
+                                </p>
+                            </div>
+
+                            <div className="mt-4 space-y-4">
+                                {values.particleFractions.map((fraction, index) => {
+                                    const rowErrors = submitted ? errors.fractionRows?.[fraction.id] : undefined;
+                                    const fieldClass = (hasError: boolean) => `w-full rounded-xl border bg-white px-3 py-2.5 text-slate-900 outline-none focus:ring-2 ${hasError ? 'border-red-400 focus:ring-red-200' : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'}`;
+                                    return (
+                                        <div key={fraction.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                            <div className="mb-3 flex items-center justify-between gap-3">
+                                                <h3 className="text-sm font-semibold text-slate-800">Dải hạt {index + 1}</h3>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeFraction(fraction.id)}
+                                                    className="rounded-lg px-2 py-1 text-sm font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600"
+                                                    aria-label={`Xóa dải hạt ${index + 1}`}
+                                                >
+                                                    Xóa dải
+                                                </button>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-3">
+                                                <div>
+                                                    <label htmlFor={`fraction-${fraction.id}-from`} className="mb-1 block text-xs font-semibold text-slate-700">Cận dưới (µm)</label>
+                                                    <input
+                                                        id={`fraction-${fraction.id}-from`}
+                                                        type="number"
+                                                        min="0"
+                                                        step="any"
+                                                        inputMode="decimal"
+                                                        value={fraction.diameterFromMicron}
+                                                        onChange={(event) => changeFraction(fraction.id, 'diameterFromMicron', event.target.value)}
+                                                        aria-invalid={Boolean(rowErrors?.diameterFromMicron)}
+                                                        className={fieldClass(Boolean(rowErrors?.diameterFromMicron))}
+                                                        placeholder={index === 0 ? '0' : 'Nối dải trước'}
+                                                    />
+                                                    {rowErrors?.diameterFromMicron && <p className="mt-1 text-xs text-red-700" role="alert">{rowErrors.diameterFromMicron}</p>}
+                                                </div>
+                                                <div>
+                                                    <label htmlFor={`fraction-${fraction.id}-to`} className="mb-1 block text-xs font-semibold text-slate-700">Cận trên (µm) *</label>
+                                                    <input
+                                                        id={`fraction-${fraction.id}-to`}
+                                                        type="number"
+                                                        min="0"
+                                                        step="any"
+                                                        inputMode="decimal"
+                                                        value={fraction.diameterMicron}
+                                                        onChange={(event) => changeFraction(fraction.id, 'diameterMicron', event.target.value)}
+                                                        aria-invalid={Boolean(rowErrors?.diameterMicron)}
+                                                        className={fieldClass(Boolean(rowErrors?.diameterMicron))}
+                                                        placeholder="Ví dụ: 20"
+                                                    />
+                                                    {rowErrors?.diameterMicron && <p className="mt-1 text-xs text-red-700" role="alert">{rowErrors.diameterMicron}</p>}
+                                                </div>
+                                                <div>
+                                                    <label htmlFor={`fraction-${fraction.id}-weight`} className="mb-1 block text-xs font-semibold text-slate-700">Tỷ lệ khối lượng (%) *</label>
+                                                    <input
+                                                        id={`fraction-${fraction.id}-weight`}
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="any"
+                                                        inputMode="decimal"
+                                                        value={fraction.weightPercent}
+                                                        onChange={(event) => changeFraction(fraction.id, 'weightPercent', event.target.value)}
+                                                        aria-invalid={Boolean(rowErrors?.weightPercent)}
+                                                        className={fieldClass(Boolean(rowErrors?.weightPercent))}
+                                                        placeholder="Ví dụ: 40"
+                                                    />
+                                                    {rowErrors?.weightPercent && <p className="mt-1 text-xs text-red-700" role="alert">{rowErrors.weightPercent}</p>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {submitted && errors.fractions && <p className="mt-3 text-sm text-red-700" role="alert">{errors.fractions}</p>}
+                            <button
+                                type="button"
+                                onClick={addFraction}
+                                className="mt-4 rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-800 transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                            >
+                                + Thêm dải hạt
+                            </button>
                         </section>
 
                         <section aria-labelledby="chamber-title" className="border-t border-slate-200 pt-6">
@@ -221,7 +380,7 @@ export default function CalculationPage() {
                                 disabled={loading}
                                 className="inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                             >
-                                {loading ? 'Đang xử lý...' : 'Xem kết quả minh họa'}
+                                {loading ? 'Đang tính toán...' : 'Tính toán'}
                             </button>
                         </div>
                     </fieldset>
@@ -230,38 +389,52 @@ export default function CalculationPage() {
                 <section aria-labelledby="result-title" aria-live="polite" className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm sm:p-7">
                     <div className="flex flex-wrap items-center gap-3">
                         <h2 id="result-title" className="text-xl font-bold text-slate-900">Kết quả</h2>
-                        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Dữ liệu minh họa</span>
+                        {result && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">Đã tính và lưu</span>}
                     </div>
-                    <p className="mt-2 text-sm text-slate-600">Các giá trị dưới đây dùng để xem trước giao diện, chưa phải kết quả tính toán kỹ thuật.</p>
+                    <p className="mt-2 text-sm text-slate-600">Kết quả được trả về từ API tính toán.</p>
 
                     {loading ? (
                         <div role="status" className="mt-6 rounded-xl border border-blue-100 bg-white p-8 text-center">
                             <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" aria-hidden="true" />
-                            <p className="mt-4 font-medium text-slate-700">Đang chuẩn bị kết quả minh họa...</p>
+                            <p className="mt-4 font-medium text-slate-700">Đang gửi dữ liệu và tính toán...</p>
                         </div>
                     ) : requestError ? (
-                        <p className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">{requestError}</p>
+                        <div className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">
+                            <p>{requestError}</p>
+                            {loginRequired && <Link className="mt-2 inline-block font-semibold underline" to="/login">Đến trang đăng nhập</Link>}
+                        </div>
                     ) : result ? (
                         <div className="mt-6 space-y-5">
+                            <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                Đã lưu phương án <strong>#{result.projectId}</strong> · Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}
+                            </p>
                             <div>
                                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Kích thước buồng</h3>
                                 <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                                    <ResultCard label="Chiều cao H" value={result.h_m} unit="m" accent="bg-sky-500" />
-                                    <ResultCard label="Chiều dài L" value={result.l_m} unit="m" accent="bg-blue-500" />
-                                    <ResultCard label="Chiều rộng B" value={result.b_m} unit="m" accent="bg-indigo-500" />
+                                    <ResultCard label="Chiều cao H" value={result.result.hM} unit="m" accent="bg-sky-500" />
+                                    <ResultCard label="Chiều dài L" value={result.result.lM} unit="m" accent="bg-blue-500" />
+                                    <ResultCard label="Chiều rộng B" value={result.result.bM} unit="m" accent="bg-indigo-500" />
                                 </div>
                             </div>
                             <div>
                                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Vận tốc</h3>
                                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                                    <ResultCard label="Khí trong buồng" value={result.gas_velocity_m_s} unit="m/s" accent="bg-emerald-500" />
-                                    <ResultCard label="Lắng của hạt" value={result.settling_velocity_m_s} unit="m/s" accent="bg-teal-500" />
+                                    <ResultCard label="Khí trong buồng" value={result.input.gasVelocityMS} unit="m/s" accent="bg-emerald-500" />
+                                    <ResultCard label="Lắng của hạt" value={result.result.uMS} unit="m/s" accent="bg-teal-500" />
                                 </div>
                             </div>
+                            {result.warnings.length > 0 && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                                    <h3 className="font-semibold">Lưu ý từ API</h3>
+                                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                                        {result.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">
-                            Điền form và chọn “Xem kết quả minh họa” để xem các Card.
+                            Điền form và bấm “Tính toán” để xem kết quả từ API.
                         </div>
                     )}
                 </section>

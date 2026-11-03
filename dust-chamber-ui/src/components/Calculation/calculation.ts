@@ -20,19 +20,71 @@ export type NumericField =
     | 'chamber_pressure_drop_pa'
     | 'fan_efficiency';
 
-export type CalculationFormValues = { mode: DesignMode } & Record<NumericField, string>;
-export type CalculationErrors = Partial<Record<NumericField, string>>;
+export interface ParticleFractionForm {
+    id: number;
+    diameterFromMicron: string;
+    diameterMicron: string;
+    weightPercent: string;
+}
 
-export type CalculationInput = {
+export type CalculationFormValues = { mode: DesignMode; particleFractions: ParticleFractionForm[] } & Record<NumericField, string>;
+export type FractionRowErrors = Partial<Record<'diameterFromMicron' | 'diameterMicron' | 'weightPercent', string>>;
+export type CalculationErrors = Partial<Record<NumericField, string>> & {
+    fractions?: string;
+    fractionRows?: Record<number, FractionRowErrors>;
+};
+
+export interface CalculationPayload {
+    flowRateM3H: number;
+    temperatureC: number;
+    dustConcentrationGM3: number;
+    dustDensityKgM3: number;
+    dMinTargetUm?: number;
+    chamberHeightM?: number;
+    chamberLengthM?: number;
+    chamberWidthM?: number;
+    gasVelocityMS?: number;
+    operatingHoursPerDay?: number;
+    pipeVelocityMS?: number;
+    pipeDiameterM?: number;
+    pipeLengthM?: number;
+    frictionRPaM?: number;
+    roughnessBeta?: number;
+    localResistanceSum?: number;
+    chamberPressureDropPa?: number;
+    fanEfficiency?: number;
+    particleFractions: {
+        diameterFromMicron?: number;
+        diameterMicron: number;
+        weightPercent: number;
+    }[];
+}
+
+export interface CalculationApiResponse {
+    message: string;
+    projectId: number;
     mode: DesignMode;
-} & Record<NumericField, number | null>;
+    warnings: string[];
+    input: { gasVelocityMS: number };
+    result: {
+        hM: number;
+        lM: number;
+        bM: number;
+        uMS: number;
+        etaTotalPercent: number;
+        fanPowerKw: number;
+    };
+    fractions: unknown[];
+}
 
-export interface CalculationResult {
-    h_m: number;
-    l_m: number;
-    b_m: number;
-    gas_velocity_m_s: number;
-    settling_velocity_m_s: number;
+export class CalculationApiError extends Error {
+    readonly status: number;
+
+    constructor(message: string, status: number) {
+        super(message);
+        this.name = 'CalculationApiError';
+        this.status = status;
+    }
 }
 
 export const initialValues: CalculationFormValues = {
@@ -55,6 +107,7 @@ export const initialValues: CalculationFormValues = {
     local_resistance_sum: '0',
     chamber_pressure_drop_pa: '245',
     fan_efficiency: '0.6',
+    particleFractions: [{ id: 1, diameterFromMicron: '0', diameterMicron: '', weightPercent: '' }],
 };
 
 type Rule = { label: string; min?: number; max?: number; exclusiveMin?: boolean };
@@ -87,6 +140,9 @@ const optionalFields: NumericField[] = [
 
 export function validateCalculation(values: CalculationFormValues): CalculationErrors {
     const errors: CalculationErrors = {};
+    const fractionRows: Record<number, FractionRowErrors> = {};
+    let totalWeightPercent = 0;
+    let hasValidWeightPercent = true;
 
     for (const [key, rule] of Object.entries(rules) as [NumericField, Rule][]) {
         if (values.mode === 'CHECK' && key === 'd_min_target_um') continue;
@@ -115,30 +171,149 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
         const dimensions = ['chamber_height_m', 'chamber_length_m', 'chamber_width_m'] as const;
         if (dimensions.every((key) => !values[key].trim())) {
             for (const key of dimensions) errors[key] = 'Nhập ít nhất một kích thước H, L hoặc B.';
+        } else if (dimensions.every((key) => values[key].trim())) {
+            for (const key of dimensions) errors[key] = 'Để trống ít nhất một kích thước để API tính phần còn lại ở chế độ DESIGN.';
         }
+    }
+
+    if (values.particleFractions.length === 0) {
+        errors.fractions = 'Thêm ít nhất một dải cỡ hạt.';
+    }
+
+    for (const fraction of values.particleFractions) {
+        const rowErrors: FractionRowErrors = {};
+        const fromRaw = fraction.diameterFromMicron.trim();
+        const toRaw = fraction.diameterMicron.trim();
+        const weightRaw = fraction.weightPercent.trim();
+        const from = fromRaw === '' ? undefined : Number(fromRaw);
+        const to = toRaw === '' ? undefined : Number(toRaw);
+        const weight = weightRaw === '' ? undefined : Number(weightRaw);
+
+        if (fromRaw !== '' && (!Number.isFinite(from) || from! < 0)) {
+            rowErrors.diameterFromMicron = 'Cận dưới phải là số từ 0 trở lên.';
+        }
+        if (to === undefined) {
+            rowErrors.diameterMicron = 'Vui lòng nhập cận trên.';
+        } else if (!Number.isFinite(to) || to <= 0) {
+            rowErrors.diameterMicron = 'Cận trên phải lớn hơn 0.';
+        } else if (from !== undefined && Number.isFinite(from) && to <= from) {
+            rowErrors.diameterMicron = 'Cận trên phải lớn hơn cận dưới.';
+        }
+
+        if (weight === undefined) {
+            rowErrors.weightPercent = 'Vui lòng nhập tỷ lệ khối lượng.';
+            hasValidWeightPercent = false;
+        } else if (!Number.isFinite(weight) || weight < 0 || weight > 100) {
+            rowErrors.weightPercent = 'Tỷ lệ phải nằm trong khoảng 0–100%.';
+            hasValidWeightPercent = false;
+        } else {
+            totalWeightPercent += weight;
+        }
+
+        if (Object.keys(rowErrors).length > 0) fractionRows[fraction.id] = rowErrors;
+    }
+
+    if (Object.keys(fractionRows).length > 0) errors.fractionRows = fractionRows;
+    if (values.particleFractions.length > 0 && hasValidWeightPercent && Math.abs(totalWeightPercent - 100) > 0.01) {
+        errors.fractions = `Tổng tỷ lệ hiện là ${totalWeightPercent.toLocaleString('vi-VN')}%; cần bằng 100%.`;
     }
 
     return errors;
 }
 
-export function toCalculationInput(values: CalculationFormValues): CalculationInput {
-    const input = { mode: values.mode } as CalculationInput;
-    for (const key of Object.keys(rules) as NumericField[]) {
-        input[key] = (values.mode === 'CHECK' && key === 'd_min_target_um') || values[key].trim() === ''
-            ? null
-            : Number(values[key]);
-    }
-    return input;
+function numericValue(values: CalculationFormValues, key: NumericField): number | undefined {
+    const value = values[key].trim();
+    return value === '' ? undefined : Number(value);
 }
 
-// Chỉ là dữ liệu trình diễn. Thay hàm này bằng lời gọi API khi backend hoàn thành.
-export async function getMockCalculation(input: CalculationInput): Promise<CalculationResult> {
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
-    return {
-        h_m: input.chamber_height_m ?? 2.5,
-        l_m: input.chamber_length_m ?? 8,
-        b_m: input.chamber_width_m ?? 3.2,
-        gas_velocity_m_s: input.gas_velocity_m_s ?? 0.18,
-        settling_velocity_m_s: 0.15,
+export function toCalculationPayload(values: CalculationFormValues): CalculationPayload {
+    const payload: CalculationPayload = {
+        flowRateM3H: Number(values.flow_rate_m3_h),
+        temperatureC: Number(values.temperature_c),
+        dustConcentrationGM3: Number(values.dust_concentration_g_m3),
+        dustDensityKgM3: Number(values.dust_density_kg_m3),
+        gasVelocityMS: Number(values.gas_velocity_m_s),
+        operatingHoursPerDay: Number(values.operating_hours_per_day),
+        pipeVelocityMS: Number(values.pipe_velocity_m_s),
+        pipeLengthM: Number(values.pipe_length_m),
+        frictionRPaM: Number(values.friction_r_pa_m),
+        roughnessBeta: Number(values.roughness_beta),
+        localResistanceSum: Number(values.local_resistance_sum),
+        chamberPressureDropPa: Number(values.chamber_pressure_drop_pa),
+        fanEfficiency: Number(values.fan_efficiency),
+        particleFractions: [],
     };
+
+    if (values.mode === 'DESIGN') {
+        const dMinTargetUm = numericValue(values, 'd_min_target_um');
+        if (dMinTargetUm !== undefined) payload.dMinTargetUm = dMinTargetUm;
+    }
+
+    const optionalMappings = [
+        ['chamber_height_m', 'chamberHeightM'],
+        ['chamber_length_m', 'chamberLengthM'],
+        ['chamber_width_m', 'chamberWidthM'],
+        ['pipe_diameter_m', 'pipeDiameterM'],
+    ] as const;
+
+    for (const [formKey, payloadKey] of optionalMappings) {
+        const value = numericValue(values, formKey);
+        if (value !== undefined) payload[payloadKey] = value;
+    }
+
+    payload.particleFractions = values.particleFractions.map((fraction) => {
+        const from = fraction.diameterFromMicron.trim();
+        return {
+            ...(from === '' ? {} : { diameterFromMicron: Number(from) }),
+            diameterMicron: Number(fraction.diameterMicron),
+            weightPercent: Number(fraction.weightPercent),
+        };
+    });
+
+    return payload;
+}
+
+function getApiErrorMessage(body: unknown): string | undefined {
+    if (!body || typeof body !== 'object' || !('message' in body)) return undefined;
+    const message = body.message;
+    if (typeof message === 'string') return message;
+    if (Array.isArray(message)) return message.filter((item): item is string => typeof item === 'string').join(', ');
+    return undefined;
+}
+
+export async function submitCalculation(
+    payload: CalculationPayload,
+    accessToken: string,
+): Promise<CalculationApiResponse> {
+    let response: Response;
+    try {
+        response = await fetch('http://localhost:3001/api/calculations/design', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(payload),
+        });
+    } catch {
+        throw new CalculationApiError('Không thể kết nối máy chủ. Hãy kiểm tra backend rồi thử lại.', 0);
+    }
+
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+        const message = getApiErrorMessage(body);
+        if (response.status === 401) {
+            throw new CalculationApiError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', response.status);
+        }
+        if (response.status === 400) {
+            throw new CalculationApiError(message || 'Thông số chưa hợp lệ. Vui lòng kiểm tra lại form.', response.status);
+        }
+        throw new CalculationApiError(message || 'Máy chủ không thể tính toán lúc này. Vui lòng thử lại.', response.status);
+    }
+
+    if (!body || typeof body !== 'object' || !('result' in body) || !('input' in body)) {
+        throw new CalculationApiError('Phản hồi từ máy chủ không đúng định dạng mong đợi.', response.status);
+    }
+
+    return body as CalculationApiResponse;
 }

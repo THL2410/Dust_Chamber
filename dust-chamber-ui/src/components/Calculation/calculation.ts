@@ -60,6 +60,17 @@ export interface CalculationPayload {
     }[];
 }
 
+export interface CalculationFractionResult {
+    id?: number;
+    dFromUm: number;
+    dToUm: number;
+    dRepUm: number;
+    massPercent: number;
+    settlingVelocityMS: number;
+    efficiencyPercent: number;
+    regime: 'FULL' | 'PARTIAL' | 'OTHER_DEVICE';
+}
+
 export interface CalculationApiResponse {
     message?: string;
     projectId?: number;
@@ -74,7 +85,7 @@ export interface CalculationApiResponse {
         etaTotalPercent: number;
         fanPowerKw: number;
     };
-    fractions: unknown[];
+    fractions?: CalculationFractionResult[];
 }
 
 export class CalculationApiError extends Error {

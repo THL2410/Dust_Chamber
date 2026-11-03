@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import DustMotionModal from './DustMotionModal';
 import {
     CalculationApiError,
     initialValues,
@@ -80,6 +81,7 @@ export default function CalculationPage() {
 
     const [loadingAction, setLoadingAction] = useState<'preview' | 'save' | null>(null);
     const [result, setResult] = useState<CalculationApiResponse | null>(null);
+    const [motionOpen, setMotionOpen] = useState(false);
     const [requestError, setRequestError] = useState('');
     const [loginRequired, setLoginRequired] = useState(false);
     const [nextFractionId, setNextFractionId] = useState(2);
@@ -89,6 +91,12 @@ export default function CalculationPage() {
         (total, fraction) => total + (Number(fraction.weightPercent) || 0),
         0,
     );
+
+    const closeMotion = useCallback(() => setMotionOpen(false), []);
+    const clearResult = () => {
+        setResult(null);
+        setMotionOpen(false);
+    };
 
     useEffect(() => {
         if (!editId) return;
@@ -105,7 +113,7 @@ export default function CalculationPage() {
 
                 const data = rawData.data || rawData;
                 const input = data.input || data.inputs || data;
-                const fractions = data.fractions || data.dust_fractions || data.particleFractions || [];
+                const fractions: Array<Record<string, unknown>> = data.fractions || data.dust_fractions || data.particleFractions || [];
 
                 setValues({
                     mode: data.mode || 'CHECK',
@@ -151,7 +159,7 @@ export default function CalculationPage() {
 
     const changeField = (key: NumericField, value: string) => {
         setValues((current) => ({ ...current, [key]: value }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -160,7 +168,7 @@ export default function CalculationPage() {
         setValues((current) => ({ ...current, mode }));
         setTouched({});
         setSubmitted(false);
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -172,7 +180,7 @@ export default function CalculationPage() {
                 fraction.id === id ? { ...fraction, [field]: value } : fraction,
             ),
         }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -190,7 +198,7 @@ export default function CalculationPage() {
                 ],
             };
         });
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -200,7 +208,7 @@ export default function CalculationPage() {
             ...current,
             particleFractions: current.particleFractions.filter((fraction) => fraction.id !== id),
         }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -239,7 +247,7 @@ export default function CalculationPage() {
 
     const executeAction = async (action: 'preview' | 'save') => {
         setSubmitted(true);
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
 
@@ -526,6 +534,14 @@ export default function CalculationPage() {
                                     </ul>
                                 </div>
                             )}
+                            <button
+                                type="button"
+                                onClick={() => setMotionOpen(true)}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-5 py-3 font-semibold text-sky-800 transition hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 sm:w-auto"
+                            >
+                                <span aria-hidden="true">↗</span>
+                                Xem mô tả chuyển động
+                            </button>
                         </div>
                     ) : (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">
@@ -534,6 +550,7 @@ export default function CalculationPage() {
                     )}
                 </section>
             </div>
+            {result && motionOpen && <DustMotionModal result={result} onClose={closeMotion} />}
         </main>
     );
 }

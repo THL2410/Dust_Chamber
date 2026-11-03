@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import HistoryDetailModal from './HistoryDetailModal';
 
 export interface HistoryItem {
@@ -11,6 +12,7 @@ export interface HistoryItem {
 }
 
 const HistoryPage = () => {
+    const navigate = useNavigate();
     const [histories, setHistories] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -80,6 +82,10 @@ const HistoryPage = () => {
         setSelectedId(id);
         setSelectedTab(tab);
         setIsModalOpen(true);
+    };
+
+    const handleEdit = (id: number) => {
+        navigate(`/calculate?editId=${id}`);
     };
 
     const handleDelete = async (id: number) => {
@@ -163,6 +169,7 @@ const HistoryPage = () => {
                         histories.map((item, index) => (
                             <tr key={item.id} className="border-b border-gray-200 hover:bg-gray-50 transition">
                                 <td className="py-3 px-4 text-center font-medium">
+                                    {/* Sửa lại công thức STT */}
                                     {(page - 1) * ITEMS_PER_PAGE + index + 1}
                                 </td>
                                 <td className="py-3 px-4 font-medium text-gray-800">
@@ -173,7 +180,6 @@ const HistoryPage = () => {
                                     {formatDate(item.createdAt || item.created_at)}
                                 </td>
 
-                                {/* NÚT 1: THÔNG SỐ ĐẦU VÀO -> Truyền 'input' */}
                                 <td className="py-3 px-4 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id, 'input')}
@@ -183,7 +189,6 @@ const HistoryPage = () => {
                                     </button>
                                 </td>
 
-                                {/* NÚT 2: KẾT QUẢ TÍNH TOÁN -> Truyền 'result' */}
                                 <td className="py-3 px-4 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id, 'result')}
@@ -193,7 +198,6 @@ const HistoryPage = () => {
                                     </button>
                                 </td>
 
-                                {/* NÚT 3: KẾT QUẢ DẢI BỤI -> Truyền 'fraction' */}
                                 <td className="py-3 px-4 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id, 'fraction')}
@@ -203,7 +207,14 @@ const HistoryPage = () => {
                                     </button>
                                 </td>
 
-                                <td className="py-3 px-4 text-center">
+                                {/* Cột Hành động gộp 2 nút Chỉnh sửa và Xóa */}
+                                <td className="py-3 px-4 text-center space-y-2">
+                                    <button
+                                        onClick={() => handleEdit(item.id)}
+                                        className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 transition inline-flex items-center space-x-1 w-full justify-center text-xs font-medium"
+                                    >
+                                        <span>✏️ Sửa</span>
+                                    </button>
                                     <button
                                         onClick={() => handleDelete(item.id)}
                                         className="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded hover:bg-red-100 transition inline-flex items-center space-x-1 w-full justify-center text-xs font-medium"

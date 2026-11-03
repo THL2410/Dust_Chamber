@@ -1,5 +1,5 @@
-import { useState, type SubmitEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
     CalculationApiError,
     initialValues,
@@ -69,20 +69,85 @@ function ResultCard({ label, value, unit, accent }: { label: string; value: numb
 }
 
 export default function CalculationPage() {
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get('editId');
+    const [isFetchingOldData, setIsFetchingOldData] = useState(!!editId);
+
     const [values, setValues] = useState<CalculationFormValues>(initialValues);
     const [touched, setTouched] = useState<Partial<Record<NumericField, boolean>>>({});
     const [submitted, setSubmitted] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
+
+    const [loadingAction, setLoadingAction] = useState<'preview' | 'save' | null>(null);
     const [result, setResult] = useState<CalculationApiResponse | null>(null);
     const [requestError, setRequestError] = useState('');
     const [loginRequired, setLoginRequired] = useState(false);
     const [nextFractionId, setNextFractionId] = useState(2);
+
     const errors = validateCalculation(values);
     const fractionTotal = values.particleFractions.reduce(
         (total, fraction) => total + (Number(fraction.weightPercent) || 0),
         0,
     );
+
+    useEffect(() => {
+        if (!editId) return;
+
+        const fetchOldData = async () => {
+            try {
+                const token = sessionStorage.getItem('accessToken');
+                const response = await fetch(`http://localhost:3001/api/history/${editId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Không thể lấy dữ liệu phương án cũ');
+                const rawData = await response.json();
+
+                const data = rawData.data || rawData;
+                const input = data.input || data.inputs || data;
+                const fractions = data.fractions || data.dust_fractions || data.particleFractions || [];
+
+                setValues({
+                    mode: data.mode || 'CHECK',
+                    flow_rate_m3_h: String(input.flowRateM3H ?? input.flow_rate_m3_h ?? ''),
+                    temperature_c: String(input.temperatureC ?? input.temperature_c ?? ''),
+                    dust_concentration_g_m3: String(input.dustConcentrationGM3 ?? input.dust_concentration_g_m3 ?? ''),
+                    dust_density_kg_m3: String(input.dustDensityKgM3 ?? input.dust_density_kg_m3 ?? ''),
+                    d_min_target_um: String(input.dMinTargetUm ?? input.d_min_target_um ?? ''),
+                    chamber_height_m: String(input.chamberHeightM ?? input.chamber_height_m ?? ''),
+                    chamber_length_m: String(input.chamberLengthM ?? input.chamber_length_m ?? ''),
+                    chamber_width_m: String(input.chamberWidthM ?? input.chamber_width_m ?? ''),
+                    gas_velocity_m_s: String(input.gasVelocityMS ?? input.gas_velocity_m_s ?? '0.18'),
+                    operating_hours_per_day: String(input.operatingHoursPerDay ?? input.operating_hours_per_day ?? '16'),
+                    pipe_velocity_m_s: String(input.pipeVelocityMS ?? input.pipe_velocity_m_s ?? '15'),
+                    pipe_diameter_m: String(input.pipeDiameterM ?? input.pipe_diameter_m ?? ''),
+                    pipe_length_m: String(input.pipeLengthM ?? input.pipe_length_m ?? '32'),
+                    friction_r_pa_m: String(input.frictionRPaM ?? input.friction_r_pa_m ?? '4.05'),
+                    roughness_beta: String(input.roughnessBeta ?? input.roughness_beta ?? '1'),
+                    local_resistance_sum: String(input.localResistanceSum ?? input.local_resistance_sum ?? '0'),
+                    chamber_pressure_drop_pa: String(input.chamberPressureDropPa ?? input.chamber_pressure_drop_pa ?? '245'),
+                    fan_efficiency: String(input.fanEfficiency ?? input.fan_efficiency ?? '0.6'),
+                    particleFractions: fractions.length > 0
+                        ? fractions.map((f, idx: number) => ({
+                            id: idx + 1,
+                            diameterFromMicron: String(f.dFromUm ?? f.d_from_um ?? f.diameterFromMicron ?? '0'),
+                            diameterMicron: String(f.dToUm ?? f.d_to_um ?? f.diameterMicron ?? ''),
+                            weightPercent: String(f.massPercent ?? f.mass_percent ?? f.weightPercent ?? '')
+                        }))
+                        : initialValues.particleFractions
+                });
+
+                if (fractions.length > 0) setNextFractionId(fractions.length + 1);
+            } catch (error) {
+                console.error(error);
+                setRequestError('Không thể lấy thông số cũ. Form đang hiển thị dữ liệu mặc định.');
+            } finally {
+                setIsFetchingOldData(false);
+            }
+        };
+
+        fetchOldData();
+    }, [editId]);
 
     const changeField = (key: NumericField, value: string) => {
         setValues((current) => ({ ...current, [key]: value }));
@@ -172,8 +237,7 @@ export default function CalculationPage() {
         );
     });
 
-    const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const executeAction = async (action: 'preview' | 'save') => {
         setSubmitted(true);
         setResult(null);
         setRequestError('');
@@ -186,16 +250,16 @@ export default function CalculationPage() {
 
         const accessToken = sessionStorage.getItem('accessToken');
         if (!accessToken) {
-            setRequestError('Bạn cần đăng nhập để gửi yêu cầu tính toán.');
+            setRequestError('Bạn cần đăng nhập để thực hiện tính toán.');
             setLoginRequired(true);
             return;
         }
 
-        setLoading(true);
+        setLoadingAction(action);
         try {
             const payload = toCalculationPayload(values);
-            setResult(await submitCalculation(payload, accessToken));
-        } catch (error) {
+            setResult(await submitCalculation(payload, accessToken, action, editId));
+        } catch (error:unknown) {
             if (error instanceof CalculationApiError) {
                 setRequestError(error.message);
                 setLoginRequired(error.status === 401);
@@ -203,7 +267,7 @@ export default function CalculationPage() {
                 setRequestError('Đã xảy ra lỗi khi tính toán. Vui lòng thử lại.');
             }
         } finally {
-            setLoading(false);
+            setLoadingAction(null);
         }
     };
 
@@ -211,15 +275,22 @@ export default function CalculationPage() {
         <main className="mx-auto max-w-7xl space-y-6 px-2 py-4 sm:px-4 lg:py-8">
             <header className="rounded-2xl bg-slate-900 px-6 py-7 text-white sm:px-8">
                 <p className="text-sm font-semibold uppercase tracking-widest text-sky-300">Buồng lắng bụi</p>
-                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Nhập thông số thiết kế</h1>
+                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">
+                    {editId ? `Chỉnh sửa thông số (Dự án #${editId})` : 'Nhập thông số thiết kế'}
+                </h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
                     Chọn chế độ, điền thông số và gửi yêu cầu tính toán đến máy chủ.
                 </p>
             </header>
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] lg:items-start">
-                <form onSubmit={handleSubmit} noValidate className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-                    <fieldset disabled={loading} className="space-y-8 disabled:opacity-70">
+                <form noValidate className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" onSubmit={(e) => { e.preventDefault(); executeAction('preview'); }}>
+                    <fieldset disabled={loadingAction !== null || isFetchingOldData} className="space-y-8 disabled:opacity-70">
+                        {isFetchingOldData && (
+                            <div className="text-blue-600 font-semibold mb-4 animate-pulse">
+                                Đang tải thông số dự án cũ, vui lòng chờ...
+                            </div>
+                        )}
                         <section aria-labelledby="mode-title">
                             <h2 id="mode-title" className="text-lg font-bold text-slate-900">Chế độ tính toán</h2>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -375,13 +446,28 @@ export default function CalculationPage() {
                             {submitted && Object.keys(errors).length > 0 && (
                                 <p className="mb-3 text-sm font-medium text-red-700" role="alert">Vui lòng sửa các trường được đánh dấu trước khi xem kết quả.</p>
                             )}
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
-                            >
-                                {loading ? 'Đang tính toán...' : 'Tính toán'}
-                            </button>
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => executeAction('preview')}
+                                    disabled={loadingAction !== null || isFetchingOldData}
+                                    className="inline-flex items-center justify-center rounded-xl border border-blue-600 bg-white px-6 py-3 font-semibold text-blue-600 transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                                >
+                                    {loadingAction === 'preview' ? 'Đang tính toán...' : 'Tính toán xem trước'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => executeAction('save')}
+                                    disabled={loadingAction !== null || isFetchingOldData}
+                                    className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                                >
+                                    {loadingAction === 'save'
+                                        ? (editId ? 'Đang cập nhật...' : 'Đang lưu...')
+                                        : (editId ? 'Cập nhật lại' : 'Lưu dữ liệu vào DB')
+                                    }
+                                </button>
+                            </div>
                         </div>
                     </fieldset>
                 </form>
@@ -389,14 +475,20 @@ export default function CalculationPage() {
                 <section aria-labelledby="result-title" aria-live="polite" className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm sm:p-7">
                     <div className="flex flex-wrap items-center gap-3">
                         <h2 id="result-title" className="text-xl font-bold text-slate-900">Kết quả</h2>
-                        {result && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">Đã tính và lưu</span>}
+                        {result && (
+                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${result.projectId ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
+                                {result.projectId ? 'Đã lưu vào DB' : 'Chỉ xem trước'}
+                            </span>
+                        )}
                     </div>
                     <p className="mt-2 text-sm text-slate-600">Kết quả được trả về từ API tính toán.</p>
 
-                    {loading ? (
+                    {loadingAction ? (
                         <div role="status" className="mt-6 rounded-xl border border-blue-100 bg-white p-8 text-center">
                             <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" aria-hidden="true" />
-                            <p className="mt-4 font-medium text-slate-700">Đang gửi dữ liệu và tính toán...</p>
+                            <p className="mt-4 font-medium text-slate-700">
+                                {loadingAction === 'save' ? 'Đang xử lý dữ liệu...' : 'Đang xử lý kết quả tính toán...'}
+                            </p>
                         </div>
                     ) : requestError ? (
                         <div className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">
@@ -405,8 +497,11 @@ export default function CalculationPage() {
                         </div>
                     ) : result ? (
                         <div className="mt-6 space-y-5">
-                            <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                                Đã lưu phương án <strong>#{result.projectId}</strong> · Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}
+                            <p className={`rounded-lg px-4 py-3 text-sm ${result.projectId ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900'}`}>
+                                {result.projectId
+                                    ? <>Đã lưu phương án <strong>#{result.projectId}</strong> · Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}</>
+                                    : <>Kết quả chưa được lưu vào DB · Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}</>
+                                }
                             </p>
                             <div>
                                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Kích thước buồng</h3>
@@ -423,11 +518,11 @@ export default function CalculationPage() {
                                     <ResultCard label="Lắng của hạt" value={result.result.uMS} unit="m/s" accent="bg-teal-500" />
                                 </div>
                             </div>
-                            {result.warnings.length > 0 && (
+                            {result.warnings && result.warnings.length > 0 && (
                                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                                     <h3 className="font-semibold">Lưu ý từ API</h3>
                                     <ul className="mt-2 list-disc space-y-1 pl-5">
-                                        {result.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+                                        {result.warnings.map((warning: string, index: number) => <li key={`${index}-${warning}`}>{warning}</li>)}
                                     </ul>
                                 </div>
                             )}

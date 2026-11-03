@@ -61,8 +61,8 @@ export interface CalculationPayload {
 }
 
 export interface CalculationApiResponse {
-    message: string;
-    projectId: number;
+    message?: string;
+    projectId?: number;
     mode: DesignMode;
     warnings: string[];
     input: { gasVelocityMS: number };
@@ -214,6 +214,7 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
     }
 
     if (Object.keys(fractionRows).length > 0) errors.fractionRows = fractionRows;
+
     if (values.particleFractions.length > 0 && hasValidWeightPercent && Math.abs(totalWeightPercent - 100) > 0.01) {
         errors.fractions = `Tổng tỷ lệ hiện là ${totalWeightPercent.toLocaleString('vi-VN')}%; cần bằng 100%.`;
     }
@@ -284,11 +285,24 @@ function getApiErrorMessage(body: unknown): string | undefined {
 export async function submitCalculation(
     payload: CalculationPayload,
     accessToken: string,
+    action: 'preview' | 'save',
+    editId?: string | null
 ): Promise<CalculationApiResponse> {
+
+    let endpoint = 'http://localhost:3001/api/calculations';
+    let method = 'POST';
+
+    if (action === 'preview') {
+        endpoint = 'http://localhost:3001/api/calculations/preview';
+    } else if (action === 'save' && editId) {
+        endpoint = `http://localhost:3001/api/calculations/${editId}`;
+        method = 'PATCH';
+    }
+
     let response: Response;
     try {
-        response = await fetch('http://localhost:3001/api/calculations/design', {
-            method: 'POST',
+        response = await fetch(endpoint, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${accessToken}`,
@@ -311,9 +325,6 @@ export async function submitCalculation(
         throw new CalculationApiError(message || 'Máy chủ không thể tính toán lúc này. Vui lòng thử lại.', response.status);
     }
 
-    if (!body || typeof body !== 'object' || !('result' in body) || !('input' in body)) {
-        throw new CalculationApiError('Phản hồi từ máy chủ không đúng định dạng mong đợi.', response.status);
-    }
-
-    return body as CalculationApiResponse;
+    const returnData = (body && typeof body === 'object' && 'result' in body) ? body : { result: body };
+    return returnData as CalculationApiResponse;
 }

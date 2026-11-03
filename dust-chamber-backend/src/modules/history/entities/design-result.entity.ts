@@ -9,6 +9,7 @@ export class DesignResult {
   @Column("double precision") mu_pa_s: number;
   @Column("double precision") rho_gas_kg_m3: number;
   @Column("double precision") u_m_s: number;
+  @Column("double precision") settling_velocity_limit_m_s: number;
   @Column("double precision") tau1_s: number;
   @Column("double precision") tau2_s: number;
   @Column("double precision") l_min_m: number;

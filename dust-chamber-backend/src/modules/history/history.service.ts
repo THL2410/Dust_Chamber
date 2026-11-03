@@ -28,7 +28,7 @@ const INPUT_NONNEGATIVE = [
   "local_resistance_sum", "chamber_pressure_drop_pa",
 ];
 const RESULT = [
-  "h_m", "l_m", "b_m", "mu_pa_s", "rho_gas_kg_m3", "u_m_s", "tau1_s", "tau2_s",
+  "h_m", "l_m", "b_m", "mu_pa_s", "rho_gas_kg_m3", "u_m_s", "settling_velocity_limit_m_s", "tau1_s", "tau2_s",
   "l_min_m", "bl_m2", "d_min_calc_um", "d_limit_um", "is_retained", "gv_kg_h",
   "yv_percent", "gs_kg_h", "qs_m3_h", "gb_kg_h", "m1_kg_h", "m2_kg_h",
   "mt_kg_h", "mn_kg_day", "mr_kg_h", "cb_out_mg_m3", "eta_total_percent", "d0_m",

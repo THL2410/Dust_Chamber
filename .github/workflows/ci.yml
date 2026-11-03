@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master", "feature/**", "re/**"]
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dust-chamber-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dust-chamber-backend/package-lock.json
+      - run: npm ci
+      # Không dùng "npm run lint" vì script đó có --fix (tự sửa file trên CI)
+      - name: Lint
+        run: npx eslint "src/**/*.ts"
+      - name: Build
+        run: npm run build
+      # Chỉ chạy spec công thức; các spec Nest mẫu khác chưa được viết xong
+      - name: Unit test công thức
+        run: npx jest design-calculation
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dust-chamber-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dust-chamber-ui/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build (tsc + vite)
+        run: npm run build

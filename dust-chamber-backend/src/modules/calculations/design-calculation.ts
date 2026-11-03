@@ -49,8 +49,10 @@ export interface DesignCalcOutput {
   result: {
     hM: number; lM: number; bM: number;
     muPaS: number; rhoGasKgM3: number;
-    /** Vận tốc lắng của hạt d_limit (m/s). Lưu ý: KHÔNG phải vận tốc ngang u trong PDF. */
+    /** B3: vận tốc khí chuyển động ngang u = Q/(B·H) (m/s) */
     uMS: number;
+    /** Vận tốc lắng cuối cùng của hạt d_limit (m/s), B13 */
+    vtsLimitMS: number;
     tau1S: number; tau2S: number; lMinM: number;
     blM2: number; dMinCalcUm: number; dLimitUm: number; isRetained: boolean;
     gvKgH: number; yvPercent: number; gsKgH: number; qsM3H: number; gbKgH: number;
@@ -179,7 +181,17 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   const tau2S = L / v; // B5: thời gian lưu
   const lMinM = v * tau1S; // B6
   // Cho phép sai số số thực: ở DESIGN, τ1 = τ2 theo cấu trúc
-  const isRetained = tau1S <= tau2S * (1 + REL_TOL);
+  let isRetained = tau1S <= tau2S * (1 + REL_TOL);
+  // Chế độ CHECK có nhập d_min mục tiêu: buồng đạt khi d_min tính được <= d_min mục tiêu.
+  // (Nếu không có mục tiêu thì τ1 ≤ τ2 luôn đúng vì d_limit được làm tròn lên từ d_min tính được.)
+  if (mode === 'CHECK' && i.dMinTargetUm) {
+    isRetained = dMinCalcUm <= i.dMinTargetUm * (1 + REL_TOL);
+    if (!isRetained) {
+      warnings.push(
+        `Buồng hiện tại chỉ giữ được hạt từ ${dMinCalcUm.toFixed(1)} μm, chưa đạt mục tiêu ${i.dMinTargetUm} μm. Cần tăng B×L (hiện ${blM2.toFixed(2)} m²).`,
+      );
+    }
+  }
   if (v > 0.3) warnings.push('Vận tốc khí trong buồng > 0,3 m/s, dễ cuốn bụi trở lại.');
 
   // Cân bằng khí - bụi
@@ -215,12 +227,16 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
       efficiencyPercent: eta * 100,
       inletConcGM3: inlet,
       outletConcGM3: inlet * (1 - eta),
-      regime: full
-        ? 'FULL'
-        : eta * 100 >= C.partialCaptureMinEfficiencyPercent
-          ? 'PARTIAL'
-          : 'OTHER_DEVICE',
+      // d < 40 μm -> thiết bị khác; d >= 40 μm: đủ d_limit thì FULL, chưa đủ thì PARTIAL (η theo B14)
+      regime: dTo < C.settlerMinDiameterUm ? 'OTHER_DEVICE' : full ? 'FULL' : 'PARTIAL',
     });
+  }
+  const otherDevice = fractionResults.filter((f) => f.regime === 'OTHER_DEVICE');
+  if (otherDevice.length) {
+    const pct = otherDevice.reduce((s, f) => s + f.massPercent, 0);
+    warnings.push(
+      `${otherDevice.length} dải hạt < ${C.settlerMinDiameterUm} μm (${pct.toFixed(1)}% khối lượng): nên dùng thiết bị lọc bụi khác, xem phần gợi ý.`,
+    );
   }
   if (!fr.length) {
     warnings.push('Chưa nhập phân bố cỡ hạt nên lượng bụi thu và hiệu suất tổng = 0.');
@@ -243,6 +259,9 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   if (vtMS < 10 || vtMS > 20) {
     warnings.push(`Vận tốc khí trong ống = ${vtMS.toFixed(1)} m/s, ngoài khoảng khuyến nghị 10–20 m/s.`);
   }
+  if (i.localResistanceSum === 0) {
+    warnings.push('Σξ = 0: chưa tính tổn thất cục bộ (co, cửa vào/ra), công suất quạt có thể thấp hơn thực tế.');
+  }
   const alpha = alphaTemperatureCorrection(i.temperatureC);
   const tMin = TEMPERATURE_ALPHA_TABLE[0].temp;
   const tMax = TEMPERATURE_ALPHA_TABLE[TEMPERATURE_ALPHA_TABLE.length - 1].temp;
@@ -261,7 +280,7 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
     warnings,
     fractionResults,
     result: {
-      hM: H, lM: L, bM: B, muPaS: mu, rhoGasKgM3: rho, uMS: uSettle,
+      hM: H, lM: L, bM: B, muPaS: mu, rhoGasKgM3: rho, uMS: v, vtsLimitMS: uSettle,
       tau1S, tau2S, lMinM, blM2, dMinCalcUm, dLimitUm: dLimit, isRetained,
       gvKgH, yvPercent, gsKgH, qsM3H, gbKgH,
       m1KgH: m1, m2KgH: m2, mtKgH, mnKgDay, mrKgH, cbOutMgM3, etaTotalPercent,

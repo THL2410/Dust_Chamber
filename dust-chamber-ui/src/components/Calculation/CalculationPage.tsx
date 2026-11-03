@@ -9,6 +9,7 @@ import {
     type CalculationFormValues,
     type CalculationApiResponse,
     type DesignMode,
+    type FractionRegime,
     type NumericField,
 } from './calculation';
 
@@ -55,13 +56,23 @@ function isRequired(key: NumericField, mode: DesignMode) {
     return true;
 }
 
-function ResultCard({ label, value, unit, accent }: { label: string; value: number; unit: string; accent: string }) {
+const REGIME_LABEL: Record<FractionRegime, { text: string; className: string }> = {
+    FULL: { text: 'Lắng 100 %', className: 'bg-emerald-100 text-emerald-900' },
+    PARTIAL: { text: 'Lắng một phần', className: 'bg-amber-100 text-amber-900' },
+    OTHER_DEVICE: { text: 'Dùng thiết bị khác', className: 'bg-rose-100 text-rose-900' },
+};
+
+function fmt(value: number, digits = 2) {
+    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: digits }).format(value);
+}
+
+function ResultCard({ label, value, unit, accent, digits = 2 }: { label: string; value: number; unit: string; accent: string; digits?: number }) {
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className={`mb-4 h-1.5 w-12 rounded-full ${accent}`} />
             <p className="text-sm font-medium text-slate-500">{label}</p>
             <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-                {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value)}
+                {fmt(value, digits)}
                 <span className="ml-2 text-base font-medium text-slate-500">{unit}</span>
             </p>
         </div>
@@ -406,7 +417,12 @@ export default function CalculationPage() {
                     ) : result ? (
                         <div className="mt-6 space-y-5">
                             <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                                Đã lưu phương án <strong>#{result.projectId}</strong> · Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}
+                                {result.projectId != null && <>Đã lưu phương án <strong>#{result.projectId}</strong> · </>}Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}
+                            </p>
+                            <p className={`rounded-lg px-4 py-3 text-sm font-medium ${result.result.isRetained ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900'}`}>
+                                {result.result.isRetained
+                                    ? `Đạt: buồng giữ lại hoàn toàn hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên (chọn d_min = ${fmt(result.result.dLimitUm, 0)} µm).`
+                                    : `Chưa đạt: buồng chỉ giữ được hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên.`}
                             </p>
                             <div>
                                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Kích thước buồng</h3>
@@ -417,11 +433,75 @@ export default function CalculationPage() {
                                 </div>
                             </div>
                             <div>
-                                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Vận tốc</h3>
+                                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Vận tốc và cỡ hạt giới hạn</h3>
                                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                                    <ResultCard label="Khí trong buồng" value={result.input.gasVelocityMS} unit="m/s" accent="bg-emerald-500" />
-                                    <ResultCard label="Lắng của hạt" value={result.result.uMS} unit="m/s" accent="bg-teal-500" />
+                                    <ResultCard label="Khí trong buồng u = Q/(B·H)" value={result.result.uMS} unit="m/s" accent="bg-emerald-500" digits={3} />
+                                    <ResultCard label={`Lắng của hạt ${fmt(result.result.dLimitUm, 0)} µm`} value={result.result.vtsLimitMS} unit="m/s" accent="bg-teal-500" digits={4} />
+                                    <ResultCard label="Cỡ hạt nhỏ nhất giữ 100 % (d_min)" value={result.result.dMinCalcUm} unit="µm" accent="bg-cyan-500" />
+                                    <ResultCard label="Diện tích đáy B × L" value={result.result.blM2} unit="m²" accent="bg-sky-500" />
                                 </div>
+                            </div>
+                            <div>
+                                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Hiệu quả lọc bụi</h3>
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                                    <ResultCard label="Hiệu suất tổng" value={result.result.etaTotalPercent} unit="%" accent="bg-emerald-500" />
+                                    <ResultCard label="Nồng độ bụi sau lọc" value={result.result.cbOutMgM3} unit="mg/m³" accent="bg-rose-500" digits={0} />
+                                    <ResultCard label="Tải lượng bụi vào" value={result.result.gbKgH} unit="kg/h" accent="bg-amber-500" />
+                                    <ResultCard label="Bụi thu được" value={result.result.mtKgH} unit="kg/h" accent="bg-lime-500" />
+                                    <ResultCard label="Bụi thu mỗi ngày" value={result.result.mnKgDay} unit="kg/ngày" accent="bg-lime-600" />
+                                    <ResultCard label="Bụi còn lại theo khí" value={result.result.mrKgH} unit="kg/h" accent="bg-orange-500" />
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Ống dẫn và quạt hút</h3>
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                                    <ResultCard label="Lưu lượng khí sạch Qs" value={result.result.qsM3H} unit="m³/h" accent="bg-sky-500" digits={0} />
+                                    <ResultCard label="Đường kính ống d0" value={result.result.d0M} unit="m" accent="bg-blue-500" digits={3} />
+                                    <ResultCard label="Vận tốc trong ống" value={result.result.vtMS} unit="m/s" accent="bg-indigo-500" />
+                                    <ResultCard label="Tổn thất áp suất hệ thống" value={result.result.dpSystemPa} unit="Pa" accent="bg-violet-500" digits={1} />
+                                    <ResultCard label="Công suất quạt" value={result.result.fanPowerKw} unit="kW" accent="bg-fuchsia-500" />
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Hiệu suất theo cỡ hạt</h3>
+                                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                                    <table className="w-full min-w-[640px] text-left text-sm">
+                                        <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                                            <tr>
+                                                <th className="px-3 py-2">Cỡ hạt (µm)</th>
+                                                <th className="px-3 py-2 text-right">% KL</th>
+                                                <th className="px-3 py-2 text-right">v<sub>ts</sub> (m/s)</th>
+                                                <th className="px-3 py-2 text-right">η (%)</th>
+                                                <th className="px-3 py-2 text-right">Cb ra (g/m³)</th>
+                                                <th className="px-3 py-2">Phân loại</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {result.fractions.map((f, index) => (
+                                                <tr key={index} className="align-top">
+                                                    <td className="px-3 py-2 font-medium">{fmt(f.dFromUm, 0)} – {fmt(f.dToUm, 0)}</td>
+                                                    <td className="px-3 py-2 text-right">{fmt(f.massPercent, 1)}</td>
+                                                    <td className="px-3 py-2 text-right">{fmt(f.settlingVelocityMS, 4)}</td>
+                                                    <td className="px-3 py-2 text-right">{fmt(f.efficiencyPercent, 1)}</td>
+                                                    <td className="px-3 py-2 text-right">{fmt(f.outletConcGM3, 3)}</td>
+                                                    <td className="px-3 py-2">
+                                                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${REGIME_LABEL[f.regime].className}`}>
+                                                            {REGIME_LABEL[f.regime].text}
+                                                        </span>
+                                                        {f.collectors.length > 0 && (
+                                                            <p className="mt-1 text-xs text-slate-600">
+                                                                Gợi ý: {f.collectors.map((c) => c.name).join(', ')}
+                                                            </p>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p className="mt-2 text-xs text-slate-500">
+                                    Hạt nhỏ hơn 40 µm không phù hợp buồng lắng nên được gợi ý thiết bị lọc bụi khác.
+                                </p>
                             </div>
                             {result.warnings.length > 0 && (
                                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">

@@ -50,7 +50,7 @@ const LoginPage = () => {
 
         } catch (err) {
             console.error(err);
-            setError(err.message);
+            setError(err instanceof Error ? err.message : "Đã xảy ra lỗi");
         } finally {
             setLoading(false);
         }

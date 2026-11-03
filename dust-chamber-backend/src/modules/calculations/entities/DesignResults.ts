@@ -22,8 +22,13 @@ export class DesignResults {
   @Column("double precision", { name: "rho_gas_kg_m3", precision: 53 })
   rhoGasKgM3: number;
 
+  /** B3: vận tốc khí ngang u = Q/(B·H) (m/s) */
   @Column("double precision", { name: "u_m_s", precision: 53 })
   uMS: number;
+
+  /** Vận tốc lắng cuối cùng của hạt d_limit (m/s), B13 */
+  @Column("double precision", { name: "settling_velocity_limit_m_s", precision: 53 })
+  vtsLimitMS: number;
 
   @Column("double precision", { name: "tau1_s", precision: 53 })
   tau1S: number;

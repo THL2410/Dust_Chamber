@@ -48,7 +48,7 @@ const UserHistoryListModal: React.FC<UserHistoryListModalProps> = ({ userId, onC
                 setProjects(result.data || []);
             } catch (err) {
                 console.error(err);
-                setError(err.message);
+                setError(err instanceof Error ? err.message : "Đã xảy ra lỗi");
             } finally {
                 setLoading(false);
             }

@@ -35,6 +35,15 @@ export class CalculationsController {
     private readonly calcService: CalculationsService,
   ) {}
 
+  @Post('design/preview')
+  @ApiOperation({
+    summary: 'Tính toán xem trước, KHÔNG lưu phương án (không tạo lịch sử)',
+  })
+  @ApiBody({ type: CreateCalculationDto })
+  async preview(@Body() dto: CreateCalculationDto) {
+    return this.calcService.preview(dto);
+  }
+
   @Post('design')
   @ApiOperation({
     summary: 'Tính toán và lưu phương án thiết kế buồng lắng bụi',

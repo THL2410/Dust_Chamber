@@ -8,6 +8,13 @@ import { CreateCalculationDto } from './dto/create-calculation.dto';
 import { calculateDesign } from './design-calculation';
 import { CALCULATION_CONSTANTS as K } from './calculations.constants';
 
+interface CollectorRow {
+  id: number;
+  code: string;
+  name: string;
+  typicalEfficiency: string;
+}
+
 @Injectable()
 export class CalculationsService {
   constructor(
@@ -16,7 +23,8 @@ export class CalculationsService {
     private readonly projectRepo: Repository<DesignProjects>,
   ) {}
 
-  async calculateAndSave(userId: number, dto: CreateCalculationDto) {
+  /** Kiểm tra dữ liệu, gộp giá trị mặc định rồi gọi hàm tính thuần. Không đụng DB. */
+  private compute(dto: CreateCalculationDto) {
     const { chamberHeightM: H, chamberLengthM: L, chamberWidthM: B, dMinTargetUm: d } = dto;
     const hasAll = !!(H && L && B);
     const hasDminAndOne = !!(d && (H || L || B));
@@ -47,17 +55,51 @@ export class CalculationsService {
       fanEfficiency: dto.fanEfficiency ?? K.defaultFanEfficiency,
     };
 
-    let calc;
     try {
-      calc = calculateDesign({
-        ...inputValues,
-        fractions: dto.particleFractions,
-      });
+      const calc = calculateDesign({ ...inputValues, fractions: dto.particleFractions });
+      return { inputValues, calc };
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
 
-    const actualGasVelocityMS = calc.result.lM / calc.result.tau2S;
+  /** Thiết bị lọc bụi thay thế có khoảng cỡ hạt giao với dải [dFrom, dTo]. */
+  private findCollectors(
+    db: Pick<DataSource, 'query'>,
+    dFromUm: number,
+    dToUm: number,
+  ): Promise<CollectorRow[]> {
+    return db.query(
+      `SELECT id, code, name, typical_efficiency AS "typicalEfficiency"
+         FROM dust_collectors
+        WHERE is_active AND min_diameter_um < $2 AND max_diameter_um > $1
+        ORDER BY id`,
+      [dFromUm, dToUm],
+    );
+  }
+
+  /** Tính toán để xem trước, KHÔNG lưu DB (không tạo phương án mới trong lịch sử). */
+  async preview(dto: CreateCalculationDto) {
+    const { inputValues, calc } = this.compute(dto);
+    const fractions: unknown[] = [];
+    for (const f of calc.fractionResults) {
+      const collectors =
+        f.regime === 'OTHER_DEVICE' ? await this.findCollectors(this.dataSource, f.dFromUm, f.dToUm) : [];
+      fractions.push({ ...f, collectors });
+    }
+    return {
+      message: 'Tính toán thành công (chưa lưu).',
+      projectId: null,
+      mode: calc.mode,
+      warnings: calc.warnings,
+      input: inputValues,
+      result: calc.result,
+      fractions,
+    };
+  }
+
+  async calculateAndSave(userId: number, dto: CreateCalculationDto) {
+    const { inputValues, calc } = this.compute(dto);
 
     return this.dataSource.transaction(async (manager) => {
       const project = await manager.save(
@@ -68,12 +110,10 @@ export class CalculationsService {
           mode: calc.mode,
         }),
       );
+      // Lưu đúng giá trị người dùng nhập (không ghi đè bằng giá trị tính ra);
+      // vận tốc khí thực tế nằm ở result.uMS (B3).
       const input = await manager.save(
-        manager.create(DesignInputs, {
-          projectId: project.id,
-          ...inputValues,
-          gasVelocityMS: actualGasVelocityMS,
-        }),
+        manager.create(DesignInputs, { projectId: project.id, ...inputValues }),
       );
       const result = await manager.save(
         manager.create(DesignResults, { projectId: project.id, ...calc.result }),
@@ -93,21 +133,16 @@ export class CalculationsService {
           [row.id, f.dRepUm, f.settlingVelocityMS, f.efficiencyPercent,
            f.inletConcGM3, f.outletConcGM3, f.regime],
         );
-        let collectors: unknown[] = [];
+        let collectors: CollectorRow[] = [];
         if (f.regime === 'OTHER_DEVICE') {
-          collectors = await manager.query(
-            `WITH ins AS (
-               INSERT INTO fraction_collector_suggestions (fraction_id, collector_id)
-               SELECT $1, c.id
-               FROM dust_collectors c
-               WHERE c.is_active AND c.min_diameter_um < $3 AND c.max_diameter_um > $2
-               RETURNING collector_id
-             )
-             SELECT c.id, c.code, c.name, c.typical_efficiency AS "typicalEfficiency"
-             FROM ins JOIN dust_collectors c ON c.id = ins.collector_id
-             ORDER BY c.id`,
-            [row.id, f.dFromUm, f.dToUm],
-          );
+          collectors = await this.findCollectors(manager, f.dFromUm, f.dToUm);
+          if (collectors.length) {
+            await manager.query(
+              `INSERT INTO fraction_collector_suggestions (fraction_id, collector_id)
+               SELECT $1, UNNEST($2::smallint[])`,
+              [row.id, collectors.map((c) => c.id)],
+            );
+          }
         }
         fractions.push({ id: row.id, ...f, collectors });
       }

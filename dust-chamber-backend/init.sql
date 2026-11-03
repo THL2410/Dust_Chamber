@@ -1,19 +1,5 @@
--- =====================================================================
--- 0. DỌN DẸP CẤU TRÚC CŨ TRƯỚC KHI TẠO MỚI
--- (Giữ nguyên bảng users và refresh_tokens để không mất tài khoản)
--- =====================================================================
-DROP VIEW IF EXISTS v_design_summary CASCADE;
-DROP TABLE IF EXISTS fraction_collector_suggestions CASCADE;
-DROP TABLE IF EXISTS fraction_results CASCADE;
-DROP TABLE IF EXISTS dust_fractions CASCADE;
-DROP TABLE IF EXISTS design_results CASCADE;
-DROP TABLE IF EXISTS design_inputs CASCADE;
-DROP TABLE IF EXISTS design_projects CASCADE;
-DROP TABLE IF EXISTS dust_collectors CASCADE;
-DROP TABLE IF EXISTS alpha_coefficients CASCADE;
-
-DROP TYPE IF EXISTS design_mode CASCADE;
-DROP TYPE IF EXISTS capture_regime CASCADE;
+-- LƯU Ý: file này chỉ để KHỞI TẠO DB RỖNG (docker-entrypoint-initdb.d chạy 1 lần).
+-- Muốn xóa sạch bảng thiết kế để dựng lại (chỉ dùng khi dev) thì chạy reset-design.sql trước.
 
 -- =====================================================================
 -- 1. HÀM DÙNG CHUNG
@@ -145,6 +131,7 @@ CREATE TABLE design_results (
                                 mu_pa_s               double precision NOT NULL,
                                 rho_gas_kg_m3         double precision NOT NULL,
                                 u_m_s                 double precision NOT NULL,
+                                settling_velocity_limit_m_s double precision NOT NULL,
                                 tau1_s                double precision NOT NULL,
                                 tau2_s                double precision NOT NULL,
                                 l_min_m               double precision NOT NULL,

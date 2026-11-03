@@ -60,9 +60,31 @@ export interface CalculationPayload {
     }[];
 }
 
+export type FractionRegime = 'FULL' | 'PARTIAL' | 'OTHER_DEVICE';
+
+export interface CollectorSuggestion {
+    id: number;
+    code: string;
+    name: string;
+    typicalEfficiency: string;
+}
+
+export interface FractionView {
+    dFromUm: number;
+    dToUm: number;
+    massPercent: number;
+    dRepUm: number;
+    settlingVelocityMS: number;
+    efficiencyPercent: number;
+    inletConcGM3: number;
+    outletConcGM3: number;
+    regime: FractionRegime;
+    collectors: CollectorSuggestion[];
+}
+
 export interface CalculationApiResponse {
     message: string;
-    projectId: number;
+    projectId: number | null;
     mode: DesignMode;
     warnings: string[];
     input: { gasVelocityMS: number };
@@ -70,11 +92,29 @@ export interface CalculationApiResponse {
         hM: number;
         lM: number;
         bM: number;
+        /** B3: vận tốc khí ngang u = Q/(B·H) */
         uMS: number;
+        /** Vận tốc lắng của hạt d_limit */
+        vtsLimitMS: number;
+        tau1S: number;
+        tau2S: number;
+        blM2: number;
+        dMinCalcUm: number;
+        dLimitUm: number;
+        isRetained: boolean;
+        gbKgH: number;
+        mtKgH: number;
+        mnKgDay: number;
+        mrKgH: number;
+        qsM3H: number;
+        cbOutMgM3: number;
         etaTotalPercent: number;
+        d0M: number;
+        vtMS: number;
+        dpSystemPa: number;
         fanPowerKw: number;
     };
-    fractions: unknown[];
+    fractions: FractionView[];
 }
 
 export class CalculationApiError extends Error {

@@ -14,9 +14,9 @@ export const CALCULATION_CONSTANTS = {
   defaultChamberPressureLoss: 245, // Pa (tổn thất áp suất trong buồng lắng)
   defaultRoughnessFactorBeta: 1.0, // hệ số nhám thành ống
   defaultLocalResistanceSum: 0, // Σξ; PDF không cho giá trị, người dùng tự nhập
-  // Dải hạt chưa đủ d_min mà hiệu suất lắng < ngưỡng này thì xếp vào OTHER_DEVICE (cần thiết bị lọc khác)
-  // Ngưỡng này là quy ước của dự án, PDF không quy định.
-  partialCaptureMinEfficiencyPercent: 50,
+  // Yêu cầu đề tài (PDF không quy định): hạt có đường kính < 40 μm thì không dùng buồng lắng,
+  // gợi ý thiết bị lọc bụi khác (regime = OTHER_DEVICE). Hạt >= 40 μm tính theo công thức B13, B14.
+  settlerMinDiameterUm: 40,
 
   defaultFanEfficiency: 0.6, // hiệu suất quạt hút mặc định (60%); PDF không quy định
 } as const;

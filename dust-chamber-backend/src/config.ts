@@ -14,6 +14,7 @@ export const load = () => {
     database: env.DB_NAME || "dust_chamber_db",
   };
   return {
+    port: parseInt(env.PORT || "3001", 10),
     db: {
       ...dbConfig,
       type: "postgres",

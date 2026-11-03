@@ -8,7 +8,7 @@ export interface HistoryItem {
     name: string;
     createdAt?: string;
     created_at?: string;
-    eta_total_percent?: number;
+    eta_total_percent?: number | null;
 }
 
 const HistoryPage = () => {

@@ -40,15 +40,19 @@ export class CreateCalculationDto {
   @Type(() => Number) @IsNumber() @Min(-50) @Max(1000)
   temperatureC!: number;
 
-  @ApiProperty({ example: 12.5, description: 'Nồng độ bụi vào Cb (g/m³)' })
-  @Type(() => Number) @IsNumber() @Min(0)
-  dustConcentrationGM3!: number;
+  @ApiPropertyOptional({
+    example: 12.5,
+    description:
+      'Nồng độ bụi vào Cb (g/m³). Bắt buộc ở chế độ CHECK; chế độ DESIGN có thể bỏ trống, khi đó các kết quả cần Cb (Gv, Gs, Qs, khối lượng bụi thu, ống, quạt) trả về null',
+  })
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  dustConcentrationGM3?: number;
 
   @ApiProperty({ example: 2000, description: 'Khối lượng riêng bụi ρb (kg/m³)' })
   @Type(() => Number) @IsNumber() @IsPositive()
   dustDensityKgM3!: number;
 
-  @ApiPropertyOptional({ example: 40, description: 'd_min cần lắng (μm). Cần cho chế độ DESIGN' })
+  @ApiPropertyOptional({ example: 40, description: 'd_min cần lắng (μm). Cần cho chế độ DESIGN. Nhỏ hơn 40 μm vẫn tính nhưng kèm cảnh báo buồng rất lớn' })
   @IsOptional() @Type(() => Number) @IsNumber() @IsPositive()
   dMinTargetUm?: number;
 
@@ -106,7 +110,8 @@ export class CreateCalculationDto {
 
   @ApiPropertyOptional({
     type: [ParticleFractionDto],
-    description: 'Phân bố cỡ hạt (tổng % nên bằng 100), dùng để tính hiệu suất tổng và nồng độ bụi ra',
+    description:
+      'Phân bố cỡ hạt (tổng % nên bằng 100), dùng để tính hiệu suất tổng và nồng độ bụi ra; có thể bỏ trống ở chế độ DESIGN. Dải nằm hoàn toàn dưới 40 μm không tính trong buồng lắng; dải vắt qua mốc 40 μm bị từ chối, cần tách thành "a–40" và "40–b" (hoặc "> 40")',
     example: [{ diameterMicron: 20, weightPercent: 30 }, { diameterMicron: 60, weightPercent: 70 }],
   })
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParticleFractionDto)

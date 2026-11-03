@@ -10,7 +10,8 @@ import {
 export interface DesignCalcInput {
   flowRateM3H: number;
   temperatureC: number;
-  dustConcentrationGM3: number;
+  /** Cb (g/m³). Bỏ trống thì không tính được các đại lượng cần lượng bụi (Gv, Gs, Qs, ống, quạt, khối lượng thu) */
+  dustConcentrationGM3?: number | null;
   dustDensityKgM3: number;
   dMinTargetUm?: number | null;
   chamberHeightM?: number | null;
@@ -44,9 +45,12 @@ export interface FractionCalcResult {
   massPercent: number;
   dRepUm: number; // đường kính đại diện = cận trên của dải
   settlingVelocityMS: number; // B13
-  efficiencyPercent: number; // B14 (100 nếu d >= d_limit)
-  inletConcGM3: number; // Cb × % khối lượng
-  outletConcGM3: number; // inlet × (1 − η)
+  /** B14 (100 nếu d >= d_limit). null với dải < 40 μm (không tính trong buồng lắng) */
+  efficiencyPercent: number | null;
+  /** Cb × % khối lượng. null khi chưa nhập Cb */
+  inletConcGM3: number | null;
+  /** inlet × (1 − η). null khi chưa nhập Cb hoặc dải < 40 μm */
+  outletConcGM3: number | null;
   regime: 'FULL' | 'PARTIAL' | 'OTHER_DEVICE';
 }
 
@@ -63,12 +67,20 @@ export interface DesignCalcOutput {
     vtsLimitMS: number;
     tau1S: number; tau2S: number; lMinM: number;
     blM2: number; dMinCalcUm: number; dLimitUm: number; isRetained: boolean;
-    gvKgH: number; yvPercent: number; gsKgH: number; qsM3H: number; gbKgH: number;
-    m1KgH: number; m2KgH: number; mtKgH: number; mnKgDay: number; mrKgH: number;
-    cbOutMgM3: number; etaTotalPercent: number;
-    d0M: number; vtMS: number; alpha: number;
-    dpFrictionPa: number; pDynamicPa: number; pLocalPa: number; dpPipePa: number;
-    dpSystemPa: number; fanPowerKw: number;
+    alpha: number;
+    /* Các đại lượng dưới đây là null khi thiếu dữ liệu đầu vào (xem calculateDesign) */
+    /** Cần Cb */
+    gvKgH: number | null; yvPercent: number | null; gsKgH: number | null; qsM3H: number | null;
+    gbKgH: number | null;
+    /** Cần Cb và phân bố hạt */
+    m1KgH: number | null; m2KgH: number | null; mtKgH: number | null; mnKgDay: number | null;
+    mrKgH: number | null; cbOutMgM3: number | null;
+    /** Chỉ cần phân bố hạt (η tổng = Σ %KL × η từng dải, không phụ thuộc Cb) */
+    etaTotalPercent: number | null;
+    /** Cần Cb (qua lưu lượng khí sạch Qs) */
+    d0M: number | null; vtMS: number | null;
+    dpFrictionPa: number | null; pDynamicPa: number | null; pLocalPa: number | null; dpPipePa: number | null;
+    dpSystemPa: number | null; fanPowerKw: number | null;
   };
 }
 
@@ -202,17 +214,30 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   }
   if (v > 0.3) warnings.push('Vận tốc khí trong buồng > 0,3 m/s, dễ cuốn bụi trở lại.');
 
-  // Cân bằng khí - bụi
-  const gvKgH = rho * Qh; // B15
-  const gbKgH = (Qh * i.dustConcentrationGM3) / 1000; // B19
-  const yvPercent = i.dustConcentrationGM3 / rho / 10; // B16 (g/kg -> %)
-  const gsKgH = gvKgH * (1 - yvPercent / 100); // B17
-  const qsM3H = gsKgH / rho; // B18
+  // d_min mục tiêu < 40 μm: vẫn tính B×L bình thường nhưng báo buồng sẽ rất lớn
+  const limitUm = C.settlerMinDiameterUm;
+  if (i.dMinTargetUm && i.dMinTargetUm < limitUm) {
+    warnings.push(
+      `d_min mục tiêu ${i.dMinTargetUm} μm < ${limitUm} μm: buồng rất lớn (B×L = ${blM2.toFixed(1)} m²), nên cân nhắc dùng thiết bị lọc bụi khác.`,
+    );
+  }
 
-  // Kết quả theo từng dải (B13, B14, B20-B21); diameterMicron = cận trên của dải
+  // Cân bằng khí - bụi: cần Cb, thiếu Cb thì trả null
+  const cb = i.dustConcentrationGM3 ?? null;
+  const gvKgH = cb !== null ? rho * Qh : null; // B15
+  const gbKgH = cb !== null ? (Qh * cb) / 1000 : null; // B19
+  const yvPercent = cb !== null ? cb / rho / 10 : null; // B16 (g/kg -> %)
+  const gsKgH = gvKgH !== null && yvPercent !== null ? gvKgH * (1 - yvPercent / 100) : null; // B17
+  const qsM3H = gsKgH !== null ? gsKgH / rho : null; // B18
+
+  // Kết quả theo từng dải (B13, B14, B20-B21); diameterMicron = cận trên của dải.
+  // Quy tắc đề tài: dải nằm hoàn toàn dưới 40 μm -> OTHER_DEVICE, KHÔNG tính η, không cộng vào
+  // lượng bụi thu (M1, M2); chúng coi như đi qua buồng nên nằm trong mẫu số của η tổng.
   let m1 = 0;
   let m2 = 0;
+  let capturedFraction = 0; // Σ (%KL / 100 × η từng dải); dải < 40 μm có η = 0
   const fr = i.fractions ?? [];
+  const hasFractions = fr.length > 0;
   const fractionResults: FractionCalcResult[] = [];
   let prevTo = 0;
   for (const f of fr) {
@@ -232,69 +257,106 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
       dRep = dTo;
       prevTo = dTo;
     }
+    // Dải vắt qua mốc 40 μm không phân loại được: bắt người dùng tách dải
+    if (dFrom < limitUm && (dTo === null || dTo > limitUm)) {
+      throw new Error(
+        dTo === null
+          ? `Dải > ${dFrom} μm có cận dưới nhỏ hơn ${limitUm} μm nên vắt qua mốc ${limitUm} μm. Hãy tách thành "${dFrom}–${limitUm}" và "> ${limitUm}".`
+          : `Dải ${dFrom}–${dTo} μm vắt qua mốc ${limitUm} μm. Hãy tách thành "${dFrom}–${limitUm}" và "${limitUm}–${dTo}".`,
+      );
+    }
     const vts = settle(dRep);
-    const full = dRep >= dLimit;
-    const eta = full ? 1 : Math.min(1, (vts * blM2) / Q); // B14
-    const inlet = (i.dustConcentrationGM3 * f.weightPercent) / 100;
-    const mass = (f.weightPercent / 100) * gbKgH;
-    if (full) m1 += mass; // lắng 100 %
-    else m2 += mass * eta;
+    const inlet = cb !== null ? (cb * f.weightPercent) / 100 : null;
+    const belowLimit = dTo !== null && dTo <= limitUm; // cả dải < 40 μm
+    let eta: number | null = null; // tỉ lệ 0..1
+    let regime: FractionCalcResult['regime'] = 'OTHER_DEVICE';
+    if (!belowLimit) {
+      // d >= 40 μm: đủ d_limit thì FULL, chưa đủ thì PARTIAL (η theo B14)
+      const full = dRep >= dLimit;
+      eta = full ? 1 : Math.min(1, (vts * blM2) / Q); // B14
+      regime = full ? 'FULL' : 'PARTIAL';
+      capturedFraction += (f.weightPercent / 100) * eta;
+      if (gbKgH !== null) {
+        const mass = (f.weightPercent / 100) * gbKgH;
+        if (full) m1 += mass; // lắng 100 %
+        else m2 += mass * eta;
+      }
+    }
     fractionResults.push({
       dFromUm: dFrom,
       dToUm: dTo,
       massPercent: f.weightPercent,
       dRepUm: dRep,
       settlingVelocityMS: vts,
-      efficiencyPercent: eta * 100,
+      efficiencyPercent: eta === null ? null : eta * 100,
       inletConcGM3: inlet,
-      outletConcGM3: inlet * (1 - eta),
-      // d < 40 μm -> thiết bị khác; d >= 40 μm: đủ d_limit thì FULL, chưa đủ thì PARTIAL (η theo B14)
-      regime: dRep < C.settlerMinDiameterUm ? 'OTHER_DEVICE' : full ? 'FULL' : 'PARTIAL',
+      outletConcGM3: inlet !== null && eta !== null ? inlet * (1 - eta) : null,
+      regime,
     });
   }
   const otherDevice = fractionResults.filter((f) => f.regime === 'OTHER_DEVICE');
   if (otherDevice.length) {
     const pct = otherDevice.reduce((s, f) => s + f.massPercent, 0);
     warnings.push(
-      `${otherDevice.length} dải hạt < ${C.settlerMinDiameterUm} μm (${pct.toFixed(1)}% khối lượng): nên dùng thiết bị lọc bụi khác, xem phần gợi ý.`,
+      `${otherDevice.length} dải hạt < ${limitUm} μm (${pct.toFixed(1)}% khối lượng): không tính hiệu suất và lượng bụi thu trong buồng lắng, nên dùng thiết bị lọc bụi khác, xem phần gợi ý.`,
     );
   }
-  if (!fr.length) {
-    warnings.push('Chưa nhập phân bố cỡ hạt nên lượng bụi thu và hiệu suất tổng = 0.');
+  if (cb === null) {
+    warnings.push(
+      'Chưa nhập nồng độ bụi Cb: không tính lượng khí và bụi (Gv, Gs, Qs), lượng bụi thu, ống dẫn và quạt.',
+    );
+  }
+  if (!hasFractions) {
+    warnings.push(
+      'Chưa nhập phân bố cỡ hạt: không tính hiệu suất tổng, lượng bụi thu (M1, M2) và nồng độ bụi ra.',
+    );
   } else {
     const sum = fr.reduce((s, f) => s + f.weightPercent, 0);
     if (Math.abs(sum - 100) > 0.01) {
       warnings.push(`Tổng % khối lượng các dải hạt = ${sum.toFixed(2)}%, khác 100%.`);
     }
   }
-  const mtKgH = m1 + m2;
-  const mnKgDay = mtKgH * i.operatingHoursPerDay; // B23
-  const mrKgH = gbKgH - mtKgH; // B24
-  const cbOutMgM3 = qsM3H > 0 ? (mrKgH * 1e6) / qsM3H : 0; // B25
-  const etaTotalPercent = gbKgH > 0 ? (mtKgH / gbKgH) * 100 : 0;
+  // η tổng = Σ %KL × η từng dải (chia cho tổng bụi, gồm cả dải < 40 μm) nên không cần Cb
+  const etaTotalPercent = hasFractions ? capturedFraction * 100 : null;
+  const hasMass = gbKgH !== null && hasFractions;
+  const mtKgH = hasMass ? m1 + m2 : null;
+  const mnKgDay = mtKgH !== null ? mtKgH * i.operatingHoursPerDay : null; // B23
+  const mrKgH = mtKgH !== null && gbKgH !== null ? gbKgH - mtKgH : null; // B24
+  const cbOutMgM3 =
+    mrKgH !== null && qsM3H !== null ? (qsM3H > 0 ? (mrKgH * 1e6) / qsM3H : 0) : null; // B25
 
-  // Ống dẫn và quạt
-  const Qs = qsM3H / 3600;
-  const d0M = i.pipeDiameterM ?? 2 * Math.sqrt(Qs / (Math.PI * i.pipeVelocityMS)); // B26
-  const vtMS = (4 * Qs) / (Math.PI * d0M * d0M); // B27
-  if (vtMS < 10 || vtMS > 20) {
-    warnings.push(`Vận tốc khí trong ống = ${vtMS.toFixed(1)} m/s, ngoài khoảng khuyến nghị 10–20 m/s.`);
-  }
-  if (i.localResistanceSum === 0) {
-    warnings.push('Σξ = 0: chưa tính tổn thất cục bộ (co, cửa vào/ra), công suất quạt có thể thấp hơn thực tế.');
-  }
+  // Ống dẫn và quạt: cần lưu lượng khí sạch Qs nên cần Cb
   const alpha = alphaTemperatureCorrection(i.temperatureC);
-  const tMin = TEMPERATURE_ALPHA_TABLE[0].temp;
-  const tMax = TEMPERATURE_ALPHA_TABLE[TEMPERATURE_ALPHA_TABLE.length - 1].temp;
-  if (i.temperatureC < tMin || i.temperatureC > tMax) {
-    warnings.push(`Bảng 2.1 chỉ có α cho ${tMin}–${tMax} °C; ngoài khoảng này dùng α = ${alpha}.`);
+  let d0M: number | null = null;
+  let vtMS: number | null = null;
+  let dpFrictionPa: number | null = null;
+  let pDynamicPa: number | null = null;
+  let pLocalPa: number | null = null;
+  let dpPipePa: number | null = null;
+  let dpSystemPa: number | null = null;
+  let fanPowerKw: number | null = null;
+  if (qsM3H !== null) {
+    const Qs = qsM3H / 3600;
+    d0M = i.pipeDiameterM ?? 2 * Math.sqrt(Qs / (Math.PI * i.pipeVelocityMS)); // B26
+    vtMS = (4 * Qs) / (Math.PI * d0M * d0M); // B27
+    if (vtMS < 10 || vtMS > 20) {
+      warnings.push(`Vận tốc khí trong ống = ${vtMS.toFixed(1)} m/s, ngoài khoảng khuyến nghị 10–20 m/s.`);
+    }
+    if (i.localResistanceSum === 0) {
+      warnings.push('Σξ = 0: chưa tính tổn thất cục bộ (co, cửa vào/ra), công suất quạt có thể thấp hơn thực tế.');
+    }
+    const tMin = TEMPERATURE_ALPHA_TABLE[0].temp;
+    const tMax = TEMPERATURE_ALPHA_TABLE[TEMPERATURE_ALPHA_TABLE.length - 1].temp;
+    if (i.temperatureC < tMin || i.temperatureC > tMax) {
+      warnings.push(`Bảng 2.1 chỉ có α cho ${tMin}–${tMax} °C; ngoài khoảng này dùng α = ${alpha}.`);
+    }
+    dpFrictionPa = i.frictionRPaM * i.pipeLengthM * alpha * i.roughnessBeta; // B28
+    pDynamicPa = (rho * vtMS * vtMS) / 2;
+    pLocalPa = i.localResistanceSum * pDynamicPa; // B29
+    dpPipePa = dpFrictionPa + pLocalPa; // B30
+    dpSystemPa = i.chamberPressureDropPa + dpPipePa; // B31
+    fanPowerKw = (qsM3H * dpSystemPa) / (3600 * 1000 * i.fanEfficiency); // B32
   }
-  const dpFrictionPa = i.frictionRPaM * i.pipeLengthM * alpha * i.roughnessBeta; // B28
-  const pDynamicPa = (rho * vtMS * vtMS) / 2;
-  const pLocalPa = i.localResistanceSum * pDynamicPa; // B29
-  const dpPipePa = dpFrictionPa + pLocalPa; // B30
-  const dpSystemPa = i.chamberPressureDropPa + dpPipePa; // B31
-  const fanPowerKw = (qsM3H * dpSystemPa) / (3600 * 1000 * i.fanEfficiency); // B32
 
   return {
     mode,
@@ -304,7 +366,7 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
       hM: H, lM: L, bM: B, muPaS: mu, rhoGasKgM3: rho, uMS: v, vtsLimitMS: uSettle,
       tau1S, tau2S, lMinM, blM2, dMinCalcUm, dLimitUm: dLimit, isRetained,
       gvKgH, yvPercent, gsKgH, qsM3H, gbKgH,
-      m1KgH: m1, m2KgH: m2, mtKgH, mnKgDay, mrKgH, cbOutMgM3, etaTotalPercent,
+      m1KgH: hasMass ? m1 : null, m2KgH: hasMass ? m2 : null, mtKgH, mnKgDay, mrKgH, cbOutMgM3, etaTotalPercent,
       d0M, vtMS, alpha, dpFrictionPa, pDynamicPa, pLocalPa, dpPipePa, dpSystemPa, fanPowerKw,
     },
   };

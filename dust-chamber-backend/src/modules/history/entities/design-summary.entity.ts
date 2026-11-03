@@ -10,15 +10,15 @@ export class DesignSummary {
   @ViewColumn({ name: "created_at" }) createdAt: Date;
   @ViewColumn({ name: "flow_rate_m3_h" }) flowRateM3H: number;
   @ViewColumn({ name: "temperature_c" }) temperatureC: number;
-  @ViewColumn({ name: "dust_concentration_g_m3" }) dustConcentrationGM3: number;
+  @ViewColumn({ name: "dust_concentration_g_m3" }) dustConcentrationGM3: number | null;
   @ViewColumn({ name: "h_m" }) hM: number;
   @ViewColumn({ name: "l_m" }) lM: number;
   @ViewColumn({ name: "b_m" }) bM: number;
   @ViewColumn({ name: "d_min_calc_um" }) dMinCalcUm: number;
   @ViewColumn({ name: "is_retained" }) isRetained: boolean;
-  @ViewColumn({ name: "eta_total_percent" }) etaTotalPercent: number;
-  @ViewColumn({ name: "cb_out_mg_m3" }) cbOutMgM3: number;
-  @ViewColumn({ name: "fan_power_kw" }) fanPowerKw: number;
+  @ViewColumn({ name: "eta_total_percent" }) etaTotalPercent: number | null;
+  @ViewColumn({ name: "cb_out_mg_m3" }) cbOutMgM3: number | null;
+  @ViewColumn({ name: "fan_power_kw" }) fanPowerKw: number | null;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: "user_id" })

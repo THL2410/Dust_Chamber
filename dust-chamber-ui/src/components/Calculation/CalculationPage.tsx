@@ -2,7 +2,10 @@ import { useState, type SubmitEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
     CalculationApiError,
+    NO_DATA,
+    SETTLER_MIN_UM,
     initialValues,
+    isBlankFraction,
     submitCalculation,
     toCalculationPayload,
     validateCalculation,
@@ -23,7 +26,7 @@ interface FieldConfig {
 const gasFields: FieldConfig[] = [
     { key: 'flow_rate_m3_h', label: 'Lưu lượng khí Q', unit: 'm³/h' },
     { key: 'temperature_c', label: 'Nhiệt độ khí t', unit: '°C', hint: 'Từ -50 đến 1000 °C' },
-    { key: 'dust_concentration_g_m3', label: 'Nồng độ bụi Cb', unit: 'g/m³' },
+    { key: 'dust_concentration_g_m3', label: 'Nồng độ bụi Cb', unit: 'g/m³', hint: 'Bắt buộc ở chế độ kiểm tra; chế độ thiết kế có thể bỏ trống' },
     { key: 'dust_density_kg_m3', label: 'Khối lượng riêng của bụi ρb', unit: 'kg/m³' },
 ];
 
@@ -49,6 +52,7 @@ const advancedFields: FieldConfig[] = [
 
 function isRequired(key: NumericField, mode: DesignMode) {
     if (key === 'pipe_diameter_m') return false;
+    if (key === 'dust_concentration_g_m3') return mode === 'CHECK';
     if (key === 'd_min_target_um') return mode === 'DESIGN';
     if (key === 'chamber_height_m' || key === 'chamber_length_m' || key === 'chamber_width_m') {
         return mode === 'CHECK';
@@ -66,15 +70,24 @@ function fmt(value: number, digits = 2) {
     return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: digits }).format(value);
 }
 
-function ResultCard({ label, value, unit, accent, digits = 2 }: { label: string; value: number; unit: string; accent: string; digits?: number }) {
+/** Ô trong bảng: null/undefined hiển thị "Không có số liệu" thay vì 0 */
+function NoData() {
+    return <span className="text-xs italic text-slate-400">{NO_DATA}</span>;
+}
+
+function ResultCard({ label, value, unit, accent, digits = 2 }: { label: string; value: number | null; unit: string; accent: string; digits?: number }) {
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className={`mb-4 h-1.5 w-12 rounded-full ${accent}`} />
             <p className="text-sm font-medium text-slate-500">{label}</p>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-                {fmt(value, digits)}
-                <span className="ml-2 text-base font-medium text-slate-500">{unit}</span>
-            </p>
+            {value == null ? (
+                <p className="mt-2 text-base font-medium italic text-slate-400">{NO_DATA}</p>
+            ) : (
+                <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+                    {fmt(value, digits)}
+                    <span className="ml-2 text-base font-medium text-slate-500">{unit}</span>
+                </p>
+            )}
         </div>
     );
 }
@@ -95,6 +108,8 @@ export default function CalculationPage() {
         (total, fraction) => total + (Number(fraction.weightPercent) || 0),
         0,
     );
+    // Chế độ thiết kế: chưa điền dải nào thì phân bố hạt coi như bỏ qua
+    const fractionsOptionalAndEmpty = values.mode === 'DESIGN' && values.particleFractions.every(isBlankFraction);
 
     const changeField = (key: NumericField, value: string) => {
         setValues((current) => ({ ...current, [key]: value }));
@@ -274,8 +289,8 @@ export default function CalculationPage() {
                             <h2 id="mode-title" className="text-lg font-bold text-slate-900">Chế độ tính toán</h2>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {([
-                                    { mode: 'CHECK', title: 'Kiểm tra', description: 'Đã biết H, L và B.' },
-                                    { mode: 'DESIGN', title: 'Thiết kế', description: 'Đã biết d_min và ít nhất một kích thước.' },
+                                    { mode: 'CHECK', title: 'Kiểm tra', description: 'Đã biết H, L và B; cần nồng độ bụi và phân bố hạt.' },
+                                    { mode: 'DESIGN', title: 'Thiết kế', description: 'Đã biết d_min và ít nhất một kích thước. Nồng độ bụi và phân bố hạt không bắt buộc.' },
                                 ] as const).map((option) => (
                                     <label key={option.mode} className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${values.mode === option.mode ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-400'}`}>
                                         <input
@@ -304,11 +319,19 @@ export default function CalculationPage() {
                                     <h2 id="fractions-title" className="text-lg font-bold text-slate-900">Phân bố cỡ hạt bụi</h2>
                                     <p className="mt-1 text-sm text-slate-500">
                                         Nhập cận trên và tỷ lệ khối lượng từng dải. Tổng tỷ lệ cần bằng 100%; cận dưới có thể để trống để nối tiếp dải trước.
+                                        {values.mode === 'DESIGN' && ' Ở chế độ thiết kế có thể bỏ trống toàn bộ phần này.'}
+                                    </p>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                        Dải nằm hoàn toàn dưới {SETTLER_MIN_UM} µm không tính trong buồng lắng (chỉ gợi ý thiết bị khác). Dải vắt qua mốc {SETTLER_MIN_UM} µm cần tách thành hai dải.
                                     </p>
                                 </div>
-                                <p className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold ${Math.abs(fractionTotal - 100) <= 0.01 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
-                                    Tổng: {fractionTotal.toLocaleString('vi-VN')}%
-                                </p>
+                                {fractionsOptionalAndEmpty ? (
+                                    <p className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">Không bắt buộc</p>
+                                ) : (
+                                    <p className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold ${Math.abs(fractionTotal - 100) <= 0.01 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
+                                        Tổng: {fractionTotal.toLocaleString('vi-VN')}%
+                                    </p>
+                                )}
                             </div>
 
                             <div className="mt-4 space-y-4">
@@ -528,6 +551,11 @@ export default function CalculationPage() {
                             </div>
                             <div>
                                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Hiệu suất theo cỡ hạt</h3>
+                                {result.fractions.length === 0 ? (
+                                    <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-sm text-slate-500">
+                                        {NO_DATA}: chưa nhập phân bố cỡ hạt.
+                                    </p>
+                                ) : (
                                 <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                                     <table className="w-full min-w-[640px] text-left text-sm">
                                         <thead className="bg-slate-100 text-xs uppercase text-slate-600">
@@ -546,8 +574,8 @@ export default function CalculationPage() {
                                                     <td className="px-3 py-2 font-medium">{f.dToUm == null ? `> ${fmt(f.dFromUm, 0)}` : `${fmt(f.dFromUm, 0)} – ${fmt(f.dToUm, 0)}`}</td>
                                                     <td className="px-3 py-2 text-right">{fmt(f.massPercent, 1)}</td>
                                                     <td className="px-3 py-2 text-right">{fmt(f.settlingVelocityMS, 4)}</td>
-                                                    <td className="px-3 py-2 text-right">{fmt(f.efficiencyPercent, 1)}</td>
-                                                    <td className="px-3 py-2 text-right">{fmt(f.outletConcGM3, 3)}</td>
+                                                    <td className="px-3 py-2 text-right">{f.efficiencyPercent == null ? <NoData /> : fmt(f.efficiencyPercent, 1)}</td>
+                                                    <td className="px-3 py-2 text-right">{f.outletConcGM3 == null ? <NoData /> : fmt(f.outletConcGM3, 3)}</td>
                                                     <td className="px-3 py-2">
                                                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${REGIME_LABEL[f.regime].className}`}>
                                                             {REGIME_LABEL[f.regime].text}
@@ -563,8 +591,9 @@ export default function CalculationPage() {
                                         </tbody>
                                     </table>
                                 </div>
+                                )}
                                 <p className="mt-2 text-xs text-slate-500">
-                                    Hạt nhỏ hơn 40 µm không phù hợp buồng lắng nên được gợi ý thiết bị lọc bụi khác.
+                                    Hạt nhỏ hơn {SETTLER_MIN_UM} µm không phù hợp buồng lắng nên không tính hiệu suất, chỉ gợi ý thiết bị lọc bụi khác.
                                 </p>
                             </div>
                             {result.warnings.length > 0 && (

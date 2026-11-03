@@ -17,27 +17,27 @@ export class DesignResult {
   @Column("double precision") d_min_calc_um: number;
   @Column("double precision") d_limit_um: number;
   @Column("boolean") is_retained: boolean;
-  @Column("double precision") gv_kg_h: number;
-  @Column("double precision") yv_percent: number;
-  @Column("double precision") gs_kg_h: number;
-  @Column("double precision") qs_m3_h: number;
-  @Column("double precision") gb_kg_h: number;
-  @Column("double precision") m1_kg_h: number;
-  @Column("double precision") m2_kg_h: number;
-  @Column("double precision") mt_kg_h: number;
-  @Column("double precision") mn_kg_day: number;
-  @Column("double precision") mr_kg_h: number;
-  @Column("double precision") cb_out_mg_m3: number;
-  @Column("double precision") eta_total_percent: number;
-  @Column("double precision") d0_m: number;
-  @Column("double precision") vt_m_s: number;
+  @Column("double precision", { nullable: true }) gv_kg_h: number | null;
+  @Column("double precision", { nullable: true }) yv_percent: number | null;
+  @Column("double precision", { nullable: true }) gs_kg_h: number | null;
+  @Column("double precision", { nullable: true }) qs_m3_h: number | null;
+  @Column("double precision", { nullable: true }) gb_kg_h: number | null;
+  @Column("double precision", { nullable: true }) m1_kg_h: number | null;
+  @Column("double precision", { nullable: true }) m2_kg_h: number | null;
+  @Column("double precision", { nullable: true }) mt_kg_h: number | null;
+  @Column("double precision", { nullable: true }) mn_kg_day: number | null;
+  @Column("double precision", { nullable: true }) mr_kg_h: number | null;
+  @Column("double precision", { nullable: true }) cb_out_mg_m3: number | null;
+  @Column("double precision", { nullable: true }) eta_total_percent: number | null;
+  @Column("double precision", { nullable: true }) d0_m: number | null;
+  @Column("double precision", { nullable: true }) vt_m_s: number | null;
   @Column("double precision") alpha: number;
-  @Column("double precision") dp_friction_pa: number;
-  @Column("double precision") p_dynamic_pa: number;
-  @Column("double precision") p_local_pa: number;
-  @Column("double precision") dp_pipe_pa: number;
-  @Column("double precision") dp_system_pa: number;
-  @Column("double precision") fan_power_kw: number;
+  @Column("double precision", { nullable: true }) dp_friction_pa: number | null;
+  @Column("double precision", { nullable: true }) p_dynamic_pa: number | null;
+  @Column("double precision", { nullable: true }) p_local_pa: number | null;
+  @Column("double precision", { nullable: true }) dp_pipe_pa: number | null;
+  @Column("double precision", { nullable: true }) dp_system_pa: number | null;
+  @Column("double precision", { nullable: true }) fan_power_kw: number | null;
 }
 
 @Entity("fraction_results")
@@ -45,9 +45,9 @@ export class FractionResult {
   @PrimaryColumn({ type: "integer" }) fraction_id: number;
   @Column("double precision") d_rep_um: number;
   @Column("double precision") settling_velocity_m_s: number;
-  @Column("double precision") efficiency_percent: number;
-  @Column("double precision") inlet_conc_g_m3: number;
-  @Column("double precision") outlet_conc_g_m3: number;
+  @Column("double precision", { nullable: true }) efficiency_percent: number | null;
+  @Column("double precision", { nullable: true }) inlet_conc_g_m3: number | null;
+  @Column("double precision", { nullable: true }) outlet_conc_g_m3: number | null;
   @Column({ type: "enum", enumName: "capture_regime", enum: ["FULL", "PARTIAL", "OTHER_DEVICE"] })
   regime: "FULL" | "PARTIAL" | "OTHER_DEVICE";
 }

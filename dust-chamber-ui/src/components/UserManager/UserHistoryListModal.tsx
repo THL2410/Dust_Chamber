@@ -10,7 +10,7 @@ export interface ProjectSummary {
     mode: string;
     createdAt: string;
     flowRateM3H: number;
-    etaTotalPercent: number;
+    etaTotalPercent: number | null;
 }
 
 export interface UserHistoryListModalProps {

@@ -2,32 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { API_URL } from '../../config';
+import { NO_DATA } from '../Calculation/calculation';
 
 export interface FractionData {
     d_from_um: number;
-    d_to_um?: number;
+    d_to_um?: number | null;
     mass_percent: number;
-    result?: Record<string, string | number>;
+    result?: Record<string, string | number | null>;
     collectors?: { name: string }[];
 }
 
 export interface DetailResponse {
     project?: { name: string; mode: string };
-    input?: Record<string, number | string>;
-    result?: Record<string, number | string | boolean>;
+    input?: Record<string, number | string | null>;
+    result?: Record<string, number | string | boolean | null>;
     fractions?: FractionData[];
 }
+
+/** null/undefined -> "Không có số liệu" (không hiển thị thành 0) */
+const fixedOrNoData = (value: string | number | null | undefined, digits: number, suffix = '') =>
+    value === null || value === undefined
+        ? <span className="text-xs italic text-gray-400">{NO_DATA}</span>
+        : `${Number(value).toFixed(digits)}${suffix}`;
 
 // ==========================================
 // 1. COMPONENT: THÔNG SỐ ĐẦU VÀO
 // ==========================================
-const InputSection = ({ data }: { data?: Record<string, number | string> }) => {
+const InputSection = ({ data }: { data?: Record<string, number | string | null> }) => {
     if (!data) return <div className="p-4 text-center text-gray-500">Không có dữ liệu thông số đầu vào.</div>;
 
     const fields = [
         { label: 'Lưu lượng khí (Q)', value: data.flow_rate_m3_h, unit: 'm³/h' },
         { label: 'Nhiệt độ (T)', value: data.temperature_c, unit: '°C' },
-        { label: 'Nồng độ bụi vào (Cb)', value: data.dust_concentration_g_m3, unit: 'g/m³' },
+        { label: 'Nồng độ bụi vào (Cb)', value: data.dust_concentration_g_m3, unit: 'g/m³', showWhenNull: true },
         { label: 'Khối lượng riêng của bụi', value: data.dust_density_kg_m3, unit: 'kg/m³' },
         { label: 'Đường kính hạt mục tiêu (d_min)', value: data.d_min_target_um, unit: 'µm' },
         { label: 'Chiều cao buồng', value: data.chamber_height_m, unit: 'm' },
@@ -48,13 +55,18 @@ const InputSection = ({ data }: { data?: Record<string, number | string> }) => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {fields.map((field, idx) => (
-                field.value !== null && field.value !== undefined && (
+                // Đầu vào không nhập (d_min, kích thước, đường kính ống...) thì ẩn; riêng Cb báo "Không có số liệu"
+                field.value !== undefined && (field.value !== null || 'showWhenNull' in field) && (
                     <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
                         <span className="text-gray-600 font-medium text-sm">{field.label}</span>
-                        <span className="text-gray-900 font-semibold">
-                            {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
-                            <span className="text-xs text-gray-500 ml-1">{field.unit}</span>
-                        </span>
+                        {field.value === null ? (
+                            <span className="text-sm italic text-gray-400">{NO_DATA}</span>
+                        ) : (
+                            <span className="text-gray-900 font-semibold">
+                                {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
+                                <span className="text-xs text-gray-500 ml-1">{field.unit}</span>
+                            </span>
+                        )}
                     </div>
                 )
             ))}
@@ -65,7 +77,7 @@ const InputSection = ({ data }: { data?: Record<string, number | string> }) => {
 // ==========================================
 // 2. COMPONENT: KẾT QUẢ TÍNH TOÁN
 // ==========================================
-const ResultSection = ({ data }: { data?: Record<string, number | string | boolean> }) => {
+const ResultSection = ({ data }: { data?: Record<string, number | string | boolean | null> }) => {
     if (!data) return <div className="p-4 text-center text-gray-500">Không có dữ liệu kết quả.</div>;
 
     const fields = [
@@ -109,13 +121,18 @@ const ResultSection = ({ data }: { data?: Record<string, number | string | boole
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {fields.map((field, idx) => (
-                field.value !== null && field.value !== undefined && (
+                // null = không có số liệu (thiếu Cb hoặc phân bố hạt): vẫn hiện dòng để người xem biết
+                field.value !== undefined && (
                     <div key={idx} className="flex justify-between items-center p-3 bg-green-50 rounded-lg border border-green-100">
                         <span className="text-gray-700 font-medium text-sm">{field.label}</span>
-                        <span className="text-green-700 font-bold">
-                            {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
-                            <span className="text-xs text-green-600 ml-1">{field.unit}</span>
-                        </span>
+                        {field.value === null ? (
+                            <span className="text-sm italic text-gray-400">{NO_DATA}</span>
+                        ) : (
+                            <span className="text-green-700 font-bold">
+                                {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
+                                <span className="text-xs text-green-600 ml-1">{field.unit}</span>
+                            </span>
+                        )}
                     </div>
                 )
             ))}
@@ -131,7 +148,7 @@ const FractionSection = ({ fractions }: { fractions?: FractionData[] }) => {
         return <div className="p-4 text-center text-gray-500">Không có dữ liệu dải bụi.</div>;
     }
 
-    const translateRegime = (regime?: string | number) => {
+    const translateRegime = (regime?: string | number | null) => {
         switch (String(regime)) {
             case 'FULL': return <span className="text-green-600 font-semibold">Hoàn toàn</span>;
             case 'PARTIAL': return <span className="text-yellow-600 font-semibold">Một phần</span>;
@@ -163,11 +180,11 @@ const FractionSection = ({ fractions }: { fractions?: FractionData[] }) => {
                             {f.d_from_um} - {f.d_to_um ?? '∞'}
                         </td>
                         <td className="py-3 px-4">{Number(f.mass_percent).toFixed(2)}%</td>
-                        <td className="py-3 px-4">{Number(f.result?.d_rep_um || 0).toFixed(2)}</td>
-                        <td className="py-3 px-4">{Number(f.result?.settling_velocity_m_s || 0).toFixed(4)}</td>
-                        <td className="py-3 px-4 font-semibold text-green-600">{Number(f.result?.efficiency_percent || 0).toFixed(2)}%</td>
-                        <td className="py-3 px-4">{Number(f.result?.inlet_conc_g_m3 || 0).toFixed(4)}</td>
-                        <td className="py-3 px-4">{Number(f.result?.outlet_conc_g_m3 || 0).toFixed(4)}</td>
+                        <td className="py-3 px-4">{fixedOrNoData(f.result?.d_rep_um, 2)}</td>
+                        <td className="py-3 px-4">{fixedOrNoData(f.result?.settling_velocity_m_s, 4)}</td>
+                        <td className="py-3 px-4 font-semibold text-green-600">{fixedOrNoData(f.result?.efficiency_percent, 2, '%')}</td>
+                        <td className="py-3 px-4">{fixedOrNoData(f.result?.inlet_conc_g_m3, 4)}</td>
+                        <td className="py-3 px-4">{fixedOrNoData(f.result?.outlet_conc_g_m3, 4)}</td>
                         <td className="py-3 px-4 text-center">{translateRegime(f.result?.regime)}</td>
                         <td className="py-3 px-4 text-xs">
                             {f.collectors && f.collectors.length > 0

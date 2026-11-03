@@ -14,10 +14,10 @@ const INPUT = [
   "chamber_pressure_drop_pa", "fan_efficiency",
 ] as const;
 const INPUT_REQUIRED = [
-  "flow_rate_m3_h", "temperature_c", "dust_concentration_g_m3", "dust_density_kg_m3",
+  "flow_rate_m3_h", "temperature_c", "dust_density_kg_m3",
 ];
 const INPUT_NULLABLE = [
-  "d_min_target_um", "chamber_height_m", "chamber_length_m", "chamber_width_m", "pipe_diameter_m",
+  "dust_concentration_g_m3", "d_min_target_um", "chamber_height_m", "chamber_length_m", "chamber_width_m", "pipe_diameter_m",
 ];
 const INPUT_POSITIVE = [
   "flow_rate_m3_h", "dust_density_kg_m3", "d_min_target_um", "chamber_height_m",
@@ -129,7 +129,7 @@ export class HistoryService {
         `SELECT ${SUMMARY_COLUMNS}
          FROM v_design_summary v LEFT JOIN users u ON v.user_id = u.id
          ${where}
-         ORDER BY ${sort} ${direction}, v.id DESC
+         ORDER BY ${sort} ${direction} NULLS LAST, v.id DESC
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, limit, (page - 1) * limit], // Đã sửa (page - 1)
     );

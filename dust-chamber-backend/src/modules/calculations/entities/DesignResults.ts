@@ -51,68 +51,68 @@ export class DesignResults {
   @Column("boolean", { name: "is_retained" })
   isRetained: boolean;
 
-  @Column("double precision", { name: "gv_kg_h", precision: 53 })
-  gvKgH: number;
+  @Column("double precision", { name: "gv_kg_h", nullable: true, precision: 53 })
+  gvKgH: number | null;
 
-  @Column("double precision", { name: "yv_percent", precision: 53 })
-  yvPercent: number;
+  @Column("double precision", { name: "yv_percent", nullable: true, precision: 53 })
+  yvPercent: number | null;
 
-  @Column("double precision", { name: "gs_kg_h", precision: 53 })
-  gsKgH: number;
+  @Column("double precision", { name: "gs_kg_h", nullable: true, precision: 53 })
+  gsKgH: number | null;
 
-  @Column("double precision", { name: "qs_m3_h", precision: 53 })
-  qsM3H: number;
+  @Column("double precision", { name: "qs_m3_h", nullable: true, precision: 53 })
+  qsM3H: number | null;
 
-  @Column("double precision", { name: "gb_kg_h", precision: 53 })
-  gbKgH: number;
+  @Column("double precision", { name: "gb_kg_h", nullable: true, precision: 53 })
+  gbKgH: number | null;
 
-  @Column("double precision", { name: "m1_kg_h", precision: 53 })
-  m1KgH: number;
+  @Column("double precision", { name: "m1_kg_h", nullable: true, precision: 53 })
+  m1KgH: number | null;
 
-  @Column("double precision", { name: "m2_kg_h", precision: 53 })
-  m2KgH: number;
+  @Column("double precision", { name: "m2_kg_h", nullable: true, precision: 53 })
+  m2KgH: number | null;
 
-  @Column("double precision", { name: "mt_kg_h", precision: 53 })
-  mtKgH: number;
+  @Column("double precision", { name: "mt_kg_h", nullable: true, precision: 53 })
+  mtKgH: number | null;
 
-  @Column("double precision", { name: "mn_kg_day", precision: 53 })
-  mnKgDay: number;
+  @Column("double precision", { name: "mn_kg_day", nullable: true, precision: 53 })
+  mnKgDay: number | null;
 
-  @Column("double precision", { name: "mr_kg_h", precision: 53 })
-  mrKgH: number;
+  @Column("double precision", { name: "mr_kg_h", nullable: true, precision: 53 })
+  mrKgH: number | null;
 
-  @Column("double precision", { name: "cb_out_mg_m3", precision: 53 })
-  cbOutMgM3: number;
+  @Column("double precision", { name: "cb_out_mg_m3", nullable: true, precision: 53 })
+  cbOutMgM3: number | null;
 
-  @Column("double precision", { name: "eta_total_percent", precision: 53 })
-  etaTotalPercent: number;
+  @Column("double precision", { name: "eta_total_percent", nullable: true, precision: 53 })
+  etaTotalPercent: number | null;
 
-  @Column("double precision", { name: "d0_m", precision: 53 })
-  d0M: number;
+  @Column("double precision", { name: "d0_m", nullable: true, precision: 53 })
+  d0M: number | null;
 
-  @Column("double precision", { name: "vt_m_s", precision: 53 })
-  vtMS: number;
+  @Column("double precision", { name: "vt_m_s", nullable: true, precision: 53 })
+  vtMS: number | null;
 
   @Column("double precision", { name: "alpha", precision: 53 })
   alpha: number;
 
-  @Column("double precision", { name: "dp_friction_pa", precision: 53 })
-  dpFrictionPa: number;
+  @Column("double precision", { name: "dp_friction_pa", nullable: true, precision: 53 })
+  dpFrictionPa: number | null;
 
-  @Column("double precision", { name: "p_dynamic_pa", precision: 53 })
-  pDynamicPa: number;
+  @Column("double precision", { name: "p_dynamic_pa", nullable: true, precision: 53 })
+  pDynamicPa: number | null;
 
-  @Column("double precision", { name: "p_local_pa", precision: 53 })
-  pLocalPa: number;
+  @Column("double precision", { name: "p_local_pa", nullable: true, precision: 53 })
+  pLocalPa: number | null;
 
-  @Column("double precision", { name: "dp_pipe_pa", precision: 53 })
-  dpPipePa: number;
+  @Column("double precision", { name: "dp_pipe_pa", nullable: true, precision: 53 })
+  dpPipePa: number | null;
 
-  @Column("double precision", { name: "dp_system_pa", precision: 53 })
-  dpSystemPa: number;
+  @Column("double precision", { name: "dp_system_pa", nullable: true, precision: 53 })
+  dpSystemPa: number | null;
 
-  @Column("double precision", { name: "fan_power_kw", precision: 53 })
-  fanPowerKw: number;
+  @Column("double precision", { name: "fan_power_kw", nullable: true, precision: 53 })
+  fanPowerKw: number | null;
 
   @OneToOne(
     () => DesignProjects,

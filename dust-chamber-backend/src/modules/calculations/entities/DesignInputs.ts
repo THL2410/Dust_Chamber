@@ -13,11 +13,13 @@ export class DesignInputs {
   @Column("double precision", { name: "temperature_c", precision: 53 })
   temperatureC: number;
 
+  /** NULL khi chế độ DESIGN không nhập Cb */
   @Column("double precision", {
     name: "dust_concentration_g_m3",
+    nullable: true,
     precision: 53,
   })
-  dustConcentrationGM3: number;
+  dustConcentrationGM3: number | null;
 
   @Column("double precision", { name: "dust_density_kg_m3", precision: 53 })
   dustDensityKgM3: number;

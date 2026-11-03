@@ -37,10 +37,16 @@ export class CalculationsService {
       );
     }
 
+    // Chế độ DESIGN chỉ bắt buộc Q, t, ρb, d_min và một kích thước; Cb và phân bố hạt là tùy chọn.
+    // Chế độ CHECK vẫn cần Cb vì mục đích là kiểm tra hiệu suất và nồng độ bụi ra.
+    if (hasAll && dto.dustConcentrationGM3 == null) {
+      throw new BadRequestException('Chế độ CHECK cần nhập nồng độ bụi Cb.');
+    }
+
     const inputValues = {
       flowRateM3H: dto.flowRateM3H,
       temperatureC: dto.temperatureC,
-      dustConcentrationGM3: dto.dustConcentrationGM3,
+      dustConcentrationGM3: dto.dustConcentrationGM3 ?? null,
       dustDensityKgM3: dto.dustDensityKgM3,
       dMinTargetUm: dto.dMinTargetUm ?? null,
       chamberHeightM: H ?? null,

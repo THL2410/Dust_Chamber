@@ -51,6 +51,19 @@ export class CalculationsController {
   @ApiBody({
     type: CreateCalculationDto,
     examples: {
+      vd1Design: {
+        summary: 'Ví dụ 1 trong PDF (chế độ DESIGN, chỉ nhập dữ liệu bắt buộc)',
+        description:
+          'Chỉ cần Q, t, ρb, d_min và một kích thước. Không có Cb và phân bố hạt nên các kết quả về bụi, ống, quạt trả về null. Kỳ vọng: B×L ≈ 26,3 m², B ≈ 2,63 m, uMS = 0,18.',
+        value: {
+          name: 'Ví dụ 1 - buồng lắng bụi (DESIGN)',
+          flowRateM3H: 5000,
+          temperatureC: 200,
+          dustDensityKgM3: 1000,
+          dMinTargetUm: 50,
+          chamberLengthM: 10,
+        },
+      },
       vd2Check: {
         summary: 'Ví dụ 2 trong PDF (chế độ CHECK)',
         description:

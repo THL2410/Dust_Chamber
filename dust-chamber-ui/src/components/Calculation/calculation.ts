@@ -31,6 +31,12 @@ export interface ParticleFractionForm {
 }
 
 export type CalculationFormValues = { mode: DesignMode; particleFractions: ParticleFractionForm[] } & Record<NumericField, string>;
+/** Hiển thị cho mọi mục không có số liệu (API trả null) */
+export const NO_DATA = 'Không có số liệu';
+
+/** Hạt < 40 µm không dùng buồng lắng (khớp settlerMinDiameterUm ở backend) */
+export const SETTLER_MIN_UM = 40;
+
 export type FractionRowErrors = Partial<Record<'diameterFromMicron' | 'diameterMicron' | 'weightPercent', string>>;
 export type CalculationErrors = Partial<Record<NumericField, string>> & {
     fractions?: string;
@@ -40,7 +46,8 @@ export type CalculationErrors = Partial<Record<NumericField, string>> & {
 export interface CalculationPayload {
     flowRateM3H: number;
     temperatureC: number;
-    dustConcentrationGM3: number;
+    /** Bỏ trống được ở chế độ DESIGN */
+    dustConcentrationGM3?: number;
     dustDensityKgM3: number;
     dMinTargetUm?: number;
     chamberHeightM?: number;
@@ -80,9 +87,11 @@ export interface FractionView {
     massPercent: number;
     dRepUm: number;
     settlingVelocityMS: number;
-    efficiencyPercent: number;
-    inletConcGM3: number;
-    outletConcGM3: number;
+    /** null với dải < 40 µm (không tính trong buồng lắng) */
+    efficiencyPercent: number | null;
+    /** null khi chưa nhập Cb */
+    inletConcGM3: number | null;
+    outletConcGM3: number | null;
     regime: FractionRegime;
     collectors: CollectorSuggestion[];
 }
@@ -107,17 +116,18 @@ export interface CalculationApiResponse {
         dMinCalcUm: number;
         dLimitUm: number;
         isRetained: boolean;
-        gbKgH: number;
-        mtKgH: number;
-        mnKgDay: number;
-        mrKgH: number;
-        qsM3H: number;
-        cbOutMgM3: number;
-        etaTotalPercent: number;
-        d0M: number;
-        vtMS: number;
-        dpSystemPa: number;
-        fanPowerKw: number;
+        /* null = không có số liệu (thiếu Cb hoặc phân bố hạt) */
+        gbKgH: number | null;
+        mtKgH: number | null;
+        mnKgDay: number | null;
+        mrKgH: number | null;
+        qsM3H: number | null;
+        cbOutMgM3: number | null;
+        etaTotalPercent: number | null;
+        d0M: number | null;
+        vtMS: number | null;
+        dpSystemPa: number | null;
+        fanPowerKw: number | null;
     };
     fractions: FractionView[];
 }
@@ -183,6 +193,25 @@ const optionalFields: NumericField[] = [
     'chamber_width_m', 'pipe_diameter_m',
 ];
 
+/** Dải chưa điền gì (không cận trên, không mở, không tỷ lệ). Ở chế độ DESIGN dải như vậy bị bỏ qua. */
+export function isBlankFraction(fraction: ParticleFractionForm): boolean {
+    return !fraction.openEnded
+        && fraction.diameterMicron.trim() === ''
+        && fraction.weightPercent.trim() === '';
+}
+
+/** Các dải thực sự được gửi đi: DESIGN bỏ dải trống, CHECK giữ nguyên để báo lỗi từng ô. */
+function usedFractions(values: CalculationFormValues): ParticleFractionForm[] {
+    return values.mode === 'DESIGN'
+        ? values.particleFractions.filter((fraction) => !isBlankFraction(fraction))
+        : values.particleFractions;
+}
+
+/** Cb chỉ bắt buộc ở chế độ CHECK; DESIGN có thể bỏ trống. */
+function isOptionalField(key: NumericField, mode: DesignMode): boolean {
+    return optionalFields.includes(key) || (mode === 'DESIGN' && key === 'dust_concentration_g_m3');
+}
+
 export function validateCalculation(values: CalculationFormValues): CalculationErrors {
     const errors: CalculationErrors = {};
     const fractionRows: Record<number, FractionRowErrors> = {};
@@ -193,7 +222,7 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
         if (values.mode === 'CHECK' && key === 'd_min_target_um') continue;
         const raw = values[key].trim();
         if (!raw) {
-            if (!optionalFields.includes(key)) errors[key] = `Vui lòng nhập ${rule.label.toLowerCase()}.`;
+            if (!isOptionalField(key, values.mode)) errors[key] = `Vui lòng nhập ${rule.label.toLowerCase()}.`;
             continue;
         }
 
@@ -221,11 +250,14 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
         }
     }
 
-    if (values.particleFractions.length === 0) {
+    const fractions = usedFractions(values);
+    // DESIGN: phân bố hạt là tùy chọn (không có dải nào thì không tính η tổng và khối lượng thu)
+    if (values.mode === 'CHECK' && fractions.length === 0) {
         errors.fractions = 'Thêm ít nhất một dải cỡ hạt.';
     }
 
-    for (const fraction of values.particleFractions) {
+    let previousUpper = 0;
+    for (const fraction of fractions) {
         const rowErrors: FractionRowErrors = {};
         const fromRaw = fraction.diameterFromMicron.trim();
         const toRaw = fraction.diameterMicron.trim();
@@ -249,6 +281,24 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
             rowErrors.diameterMicron = 'Cận trên phải lớn hơn cận dưới.';
         }
 
+        // Dải vắt qua mốc 40 µm: cận dưới suy ra giống backend (bỏ trống thì nối tiếp dải trước)
+        const effectiveFrom = fraction.openEnded
+            ? (from ?? previousUpper)
+            : (from ?? (to !== undefined && previousUpper < to ? previousUpper : 0));
+        if (Number.isFinite(effectiveFrom)) {
+            if (fraction.openEnded && effectiveFrom > 0 && effectiveFrom < SETTLER_MIN_UM && !rowErrors.diameterFromMicron) {
+                rowErrors.diameterFromMicron = `Dải > ${effectiveFrom} µm vắt qua mốc ${SETTLER_MIN_UM} µm. Hãy tách thành "${effectiveFrom}–${SETTLER_MIN_UM}" và "> ${SETTLER_MIN_UM}".`;
+            } else if (!fraction.openEnded && to !== undefined && Number.isFinite(to) && !rowErrors.diameterMicron
+                && effectiveFrom < SETTLER_MIN_UM && to > SETTLER_MIN_UM) {
+                rowErrors.diameterMicron = `Dải ${effectiveFrom}–${to} µm vắt qua mốc ${SETTLER_MIN_UM} µm. Hãy tách thành "${effectiveFrom}–${SETTLER_MIN_UM}" và "${SETTLER_MIN_UM}–${to}".`;
+            }
+        }
+        if (fraction.openEnded) {
+            if (Number.isFinite(effectiveFrom)) previousUpper = effectiveFrom;
+        } else if (to !== undefined && Number.isFinite(to)) {
+            previousUpper = to;
+        }
+
         if (weight === undefined) {
             rowErrors.weightPercent = 'Vui lòng nhập tỷ lệ khối lượng.';
             hasValidWeightPercent = false;
@@ -263,7 +313,7 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
     }
 
     if (Object.keys(fractionRows).length > 0) errors.fractionRows = fractionRows;
-    if (values.particleFractions.length > 0 && hasValidWeightPercent && Math.abs(totalWeightPercent - 100) > 0.01) {
+    if (fractions.length > 0 && hasValidWeightPercent && Math.abs(totalWeightPercent - 100) > 0.01) {
         errors.fractions = `Tổng tỷ lệ hiện là ${totalWeightPercent.toLocaleString('vi-VN')}%; cần bằng 100%.`;
     }
 
@@ -279,7 +329,6 @@ export function toCalculationPayload(values: CalculationFormValues): Calculation
     const payload: CalculationPayload = {
         flowRateM3H: Number(values.flow_rate_m3_h),
         temperatureC: Number(values.temperature_c),
-        dustConcentrationGM3: Number(values.dust_concentration_g_m3),
         dustDensityKgM3: Number(values.dust_density_kg_m3),
         gasVelocityMS: Number(values.gas_velocity_m_s),
         operatingHoursPerDay: Number(values.operating_hours_per_day),
@@ -292,6 +341,9 @@ export function toCalculationPayload(values: CalculationFormValues): Calculation
         fanEfficiency: Number(values.fan_efficiency),
         particleFractions: [],
     };
+
+    const dustConcentration = numericValue(values, 'dust_concentration_g_m3');
+    if (dustConcentration !== undefined) payload.dustConcentrationGM3 = dustConcentration;
 
     if (values.mode === 'DESIGN') {
         const dMinTargetUm = numericValue(values, 'd_min_target_um');
@@ -310,7 +362,7 @@ export function toCalculationPayload(values: CalculationFormValues): Calculation
         if (value !== undefined) payload[payloadKey] = value;
     }
 
-    payload.particleFractions = values.particleFractions.map((fraction) => {
+    payload.particleFractions = usedFractions(values).map((fraction) => {
         const from = fraction.diameterFromMicron.trim();
         return {
             ...(from === '' ? {} : { diameterFromMicron: Number(from) }),

@@ -86,7 +86,7 @@ CREATE TABLE design_inputs (
                                project_id                integer PRIMARY KEY REFERENCES design_projects (id) ON DELETE CASCADE,
                                flow_rate_m3_h            double precision NOT NULL CHECK (flow_rate_m3_h > 0),
                                temperature_c             double precision NOT NULL CHECK (temperature_c BETWEEN -50 AND 1000),
-                               dust_concentration_g_m3   double precision NOT NULL CHECK (dust_concentration_g_m3 >= 0),
+                               dust_concentration_g_m3   double precision CHECK (dust_concentration_g_m3 >= 0),
                                dust_density_kg_m3        double precision NOT NULL CHECK (dust_density_kg_m3 > 0),
                                d_min_target_um           double precision CHECK (d_min_target_um > 0),
                                chamber_height_m          double precision CHECK (chamber_height_m > 0),
@@ -123,6 +123,7 @@ CREATE TABLE dust_fractions (
 -- =====================================================================
 -- 5. KẾT QUẢ TÍNH TOÁN & VIEW
 -- =====================================================================
+-- Các cột gv … fan_power_kw cho phép NULL: NULL = không có số liệu (thiếu Cb hoặc phân bố hạt).
 CREATE TABLE design_results (
                                 project_id            integer PRIMARY KEY REFERENCES design_projects (id) ON DELETE CASCADE,
                                 h_m                   double precision NOT NULL CHECK (h_m > 0),
@@ -139,36 +140,37 @@ CREATE TABLE design_results (
                                 d_min_calc_um         double precision NOT NULL,
                                 d_limit_um            double precision NOT NULL,
                                 is_retained           boolean          NOT NULL,
-                                gv_kg_h               double precision NOT NULL,
-                                yv_percent            double precision NOT NULL,
-                                gs_kg_h               double precision NOT NULL,
-                                qs_m3_h               double precision NOT NULL,
-                                gb_kg_h               double precision NOT NULL,
-                                m1_kg_h               double precision NOT NULL,
-                                m2_kg_h               double precision NOT NULL,
-                                mt_kg_h               double precision NOT NULL,
-                                mn_kg_day             double precision NOT NULL,
-                                mr_kg_h               double precision NOT NULL,
-                                cb_out_mg_m3          double precision NOT NULL,
-                                eta_total_percent     double precision NOT NULL,
-                                d0_m                  double precision NOT NULL,
-                                vt_m_s                double precision NOT NULL,
+                                gv_kg_h               double precision,
+                                yv_percent            double precision,
+                                gs_kg_h               double precision,
+                                qs_m3_h               double precision,
+                                gb_kg_h               double precision,
+                                m1_kg_h               double precision,
+                                m2_kg_h               double precision,
+                                mt_kg_h               double precision,
+                                mn_kg_day             double precision,
+                                mr_kg_h               double precision,
+                                cb_out_mg_m3          double precision,
+                                eta_total_percent     double precision,
+                                d0_m                  double precision,
+                                vt_m_s                double precision,
                                 alpha                 double precision NOT NULL,
-                                dp_friction_pa        double precision NOT NULL,
-                                p_dynamic_pa          double precision NOT NULL,
-                                p_local_pa            double precision NOT NULL,
-                                dp_pipe_pa            double precision NOT NULL,
-                                dp_system_pa          double precision NOT NULL,
-                                fan_power_kw          double precision NOT NULL
+                                dp_friction_pa        double precision,
+                                p_dynamic_pa          double precision,
+                                p_local_pa            double precision,
+                                dp_pipe_pa            double precision,
+                                dp_system_pa          double precision,
+                                fan_power_kw          double precision
 );
 
+-- efficiency_percent NULL với dải < 40 μm (không tính trong buồng lắng); inlet/outlet NULL khi thiếu Cb.
 CREATE TABLE fraction_results (
                                   fraction_id            integer PRIMARY KEY REFERENCES dust_fractions (id) ON DELETE CASCADE,
                                   d_rep_um               double precision NOT NULL,
                                   settling_velocity_m_s  double precision NOT NULL,
-                                  efficiency_percent     double precision NOT NULL CHECK (efficiency_percent BETWEEN 0 AND 100),
-                                  inlet_conc_g_m3        double precision NOT NULL,
-                                  outlet_conc_g_m3       double precision NOT NULL,
+                                  efficiency_percent     double precision CHECK (efficiency_percent BETWEEN 0 AND 100),
+                                  inlet_conc_g_m3        double precision,
+                                  outlet_conc_g_m3       double precision,
                                   regime                 capture_regime   NOT NULL
 );
 CREATE INDEX idx_fraction_results_regime ON fraction_results (regime);

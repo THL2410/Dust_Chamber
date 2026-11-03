@@ -26,13 +26,21 @@ export interface DesignCalcInput {
   localResistanceSum: number;
   chamberPressureDropPa: number;
   fanEfficiency: number;
-  fractions?: { diameterFromMicron?: number; diameterMicron: number; weightPercent: number }[];
+  fractions?: {
+    diameterFromMicron?: number;
+    /** Cận trên của dải; bỏ trống khi openEnded */
+    diameterMicron?: number;
+    /** Dải không giới hạn trên (vd > 60 μm): đường kính đại diện = cận dưới */
+    openEnded?: boolean;
+    weightPercent: number;
+  }[];
 }
 
 /** Kết quả tính riêng cho một dải hạt (tương ứng bảng dust_fractions + fraction_results) */
 export interface FractionCalcResult {
   dFromUm: number;
-  dToUm: number;
+  /** null = dải không giới hạn trên (> dFromUm) */
+  dToUm: number | null;
   massPercent: number;
   dRepUm: number; // đường kính đại diện = cận trên của dải
   settlingVelocityMS: number; // B13
@@ -208,11 +216,24 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   const fractionResults: FractionCalcResult[] = [];
   let prevTo = 0;
   for (const f of fr) {
-    const dTo = f.diameterMicron;
-    const dFrom = f.diameterFromMicron ?? (prevTo < dTo ? prevTo : 0);
-    prevTo = dTo;
-    const vts = settle(dTo);
-    const full = dTo >= dLimit;
+    let dFrom: number;
+    let dTo: number | null;
+    let dRep: number;
+    if (f.openEnded) {
+      dFrom = f.diameterFromMicron ?? prevTo;
+      if (!(dFrom > 0)) throw new Error('Dải không giới hạn trên cần có cận dưới lớn hơn 0.');
+      dTo = null;
+      dRep = dFrom; // lấy cận dưới để tính thiên về an toàn
+      prevTo = dFrom;
+    } else {
+      if (f.diameterMicron === undefined) throw new Error('Mỗi dải hạt cần có cận trên.');
+      dTo = f.diameterMicron;
+      dFrom = f.diameterFromMicron ?? (prevTo < dTo ? prevTo : 0);
+      dRep = dTo;
+      prevTo = dTo;
+    }
+    const vts = settle(dRep);
+    const full = dRep >= dLimit;
     const eta = full ? 1 : Math.min(1, (vts * blM2) / Q); // B14
     const inlet = (i.dustConcentrationGM3 * f.weightPercent) / 100;
     const mass = (f.weightPercent / 100) * gbKgH;
@@ -222,13 +243,13 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
       dFromUm: dFrom,
       dToUm: dTo,
       massPercent: f.weightPercent,
-      dRepUm: dTo,
+      dRepUm: dRep,
       settlingVelocityMS: vts,
       efficiencyPercent: eta * 100,
       inletConcGM3: inlet,
       outletConcGM3: inlet * (1 - eta),
       // d < 40 μm -> thiết bị khác; d >= 40 μm: đủ d_limit thì FULL, chưa đủ thì PARTIAL (η theo B14)
-      regime: dTo < C.settlerMinDiameterUm ? 'OTHER_DEVICE' : full ? 'FULL' : 'PARTIAL',
+      regime: dRep < C.settlerMinDiameterUm ? 'OTHER_DEVICE' : full ? 'FULL' : 'PARTIAL',
     });
   }
   const otherDevice = fractionResults.filter((f) => f.regime === 'OTHER_DEVICE');

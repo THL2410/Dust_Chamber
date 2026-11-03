@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import EditUserModal from './EditUserModal';
 import AddUserModal from './AddUserModal';
 import UserHistoryListModal from './UserHistoryListModal';
+import { API_URL } from '../../config';
 
 export interface UserItem {
     id: number | string;
@@ -27,7 +28,7 @@ const UserManagementPage = () => {
     const fetchUsers = async () => {
         try {
             const token = sessionStorage.getItem('accessToken');
-            const response = await fetch(`http://localhost:3001/api/users`, {
+            const response = await fetch(`${API_URL}/api/users`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -73,7 +74,7 @@ const UserManagementPage = () => {
 
         try {
             const token = sessionStorage.getItem('accessToken');
-            const response = await fetch(`http://localhost:3001/api/users/lock/${id}`, {
+            const response = await fetch(`${API_URL}/api/users/lock/${id}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -98,7 +99,7 @@ const UserManagementPage = () => {
             try {
                 const token = localStorage.getItem('accessToken');
 
-                const response = await fetch(`http://localhost:3001/api/users/${id}`, {
+                const response = await fetch(`${API_URL}/api/users/${id}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`

@@ -118,3 +118,33 @@ describe('calculateDesign – cảnh báo', () => {
     expect(calculateDesign({ ...ex2, localResistanceSum: 2.5 }).warnings.join(' ')).not.toMatch(/Σξ = 0/);
   });
 });
+
+describe('calculateDesign – dải không giới hạn trên (> 60 μm)', () => {
+  const open = calculateDesign({
+    ...base, flowRateM3H: 10500, temperatureC: 20, dustConcentrationGM3: 10, dustDensityKgM3: 700,
+    chamberHeightM: 2, chamberLengthM: 8, chamberWidthM: 4,
+    fractions: [
+      { diameterFromMicron: 0, diameterMicron: 20, weightPercent: 2.5 },
+      { diameterFromMicron: 20, diameterMicron: 30, weightPercent: 2.5 },
+      { diameterFromMicron: 40, diameterMicron: 60, weightPercent: 70 },
+      { diameterFromMicron: 60, openEnded: true, weightPercent: 25 },
+    ],
+  });
+
+  it('dải mở có dToUm = null, đường kính đại diện = cận dưới', () => {
+    const last = open.fractionResults[3];
+    expect(last.dToUm).toBeNull();
+    expect(last.dFromUm).toBe(60);
+    expect(last.dRepUm).toBe(60);
+  });
+
+  it('dải > 60 μm không bị xếp vào thiết bị khác', () => {
+    expect(open.fractionResults[3].regime).not.toBe('OTHER_DEVICE');
+  });
+
+  it('báo lỗi khi dải mở không có cận dưới', () => {
+    expect(() =>
+      calculateDesign({ ...ex2, fractions: [{ openEnded: true, weightPercent: 100 }] }),
+    ).toThrow(/cận dưới/);
+  });
+});

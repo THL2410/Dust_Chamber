@@ -8,6 +8,9 @@ import { CreateCalculationDto } from './dto/create-calculation.dto';
 import { calculateDesign } from './design-calculation';
 import { CALCULATION_CONSTANTS as K } from './calculations.constants';
 
+/** Cận trên giả định khi tìm thiết bị gợi ý cho dải không giới hạn trên */
+const OPEN_UPPER_UM = 1e9;
+
 interface CollectorRow {
   id: number;
   code: string;
@@ -84,7 +87,7 @@ export class CalculationsService {
     const fractions: unknown[] = [];
     for (const f of calc.fractionResults) {
       const collectors =
-        f.regime === 'OTHER_DEVICE' ? await this.findCollectors(this.dataSource, f.dFromUm, f.dToUm) : [];
+        f.regime === 'OTHER_DEVICE' ? await this.findCollectors(this.dataSource, f.dFromUm, f.dToUm ?? OPEN_UPPER_UM) : [];
       fractions.push({ ...f, collectors });
     }
     return {
@@ -135,7 +138,7 @@ export class CalculationsService {
         );
         let collectors: CollectorRow[] = [];
         if (f.regime === 'OTHER_DEVICE') {
-          collectors = await this.findCollectors(manager, f.dFromUm, f.dToUm);
+          collectors = await this.findCollectors(manager, f.dFromUm, f.dToUm ?? OPEN_UPPER_UM);
           if (collectors.length) {
             await manager.query(
               `INSERT INTO fraction_collector_suggestions (fraction_id, collector_id)

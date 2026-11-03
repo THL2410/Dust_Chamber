@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import HistoryDetailModal from './HistoryDetailModal';
+import { API_URL } from '../../config';
 
 export interface HistoryItem {
     id: number;
@@ -42,7 +43,7 @@ const HistoryPage = () => {
             setLoading(true);
             try {
                 const token = sessionStorage.getItem('accessToken');
-                const url = `http://localhost:3001/api/history?page=${page}&limit=${ITEMS_PER_PAGE}&search=${encodeURIComponent(debouncedSearchTerm)}`;
+                const url = `${API_URL}/api/history?page=${page}&limit=${ITEMS_PER_PAGE}&search=${encodeURIComponent(debouncedSearchTerm)}`;
 
                 const response = await fetch(url, {
                     method: 'GET',
@@ -87,7 +88,7 @@ const HistoryPage = () => {
 
         try {
             const token = sessionStorage.getItem('accessToken');
-            const response = await fetch(`http://localhost:3001/api/history/${id}`, {
+            const response = await fetch(`${API_URL}/api/history/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

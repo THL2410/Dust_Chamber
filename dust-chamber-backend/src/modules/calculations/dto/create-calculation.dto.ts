@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsArray, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateNested,
+  IsArray, IsBoolean, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 
 export class ParticleFractionDto {
@@ -9,9 +9,14 @@ export class ParticleFractionDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
   diameterFromMicron?: number;
 
-  @ApiProperty({ example: 50, description: 'Cận trên của dải hạt (μm). Ví dụ dải 40–50 μm thì nhập 50' })
+  @ApiPropertyOptional({ example: 50, description: 'Cận trên của dải hạt (μm). Ví dụ dải 40–50 μm thì nhập 50. Bỏ trống khi openEnded = true' })
+  @ValidateIf((o: ParticleFractionDto) => !o.openEnded)
   @Type(() => Number) @IsNumber() @IsPositive()
-  diameterMicron!: number;
+  diameterMicron?: number;
+
+  @ApiPropertyOptional({ example: true, description: 'Dải không giới hạn trên, ví dụ "> 60 μm" (nhập diameterFromMicron = 60). Đường kính đại diện lấy bằng cận dưới.' })
+  @IsOptional() @IsBoolean()
+  openEnded?: boolean;
 
   @ApiProperty({ example: 24, description: 'Phần trăm khối lượng của dải (0–100)' })
   @Type(() => Number) @IsNumber() @Min(0) @Max(100)

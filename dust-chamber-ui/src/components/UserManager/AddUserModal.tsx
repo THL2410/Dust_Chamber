@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_URL } from '../../config';
 
 export interface AddUserFormData {
     fullName: string;
@@ -36,7 +37,7 @@ const AddUserModal = ({ onClose, onSuccess }: AddUserModalProps) => {
         try {
             const token = localStorage.getItem('accessToken');
 
-            const response = await fetch(`http://localhost:3001/api/users`, {
+            const response = await fetch(`${API_URL}/api/users`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

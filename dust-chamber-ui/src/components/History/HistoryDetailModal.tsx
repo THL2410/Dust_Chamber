@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { API_URL } from '../../config';
 
 export interface FractionData {
     d_from_um: number;
@@ -200,7 +201,7 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
             setLoading(true);
             try {
                 const token = sessionStorage.getItem('accessToken');
-                const response = await fetch(`http://localhost:3001/api/history/${id}`, {
+                const response = await fetch(`${API_URL}/api/history/${id}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) throw new Error("Lỗi tải chi tiết");

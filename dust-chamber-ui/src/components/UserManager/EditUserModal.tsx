@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_URL } from '../../config';
 
 export interface UserFormData {
     id?: number | string;
@@ -39,7 +40,7 @@ const EditUserModal = ({ userData, onClose, onSuccess }: EditUserModalProps) => 
             const updateData = { ...formData };
             delete updateData.id;
 
-            const response = await fetch(`http://localhost:3001/api/users/${userData?.id}`, {
+            const response = await fetch(`${API_URL}/api/users/${userData?.id}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

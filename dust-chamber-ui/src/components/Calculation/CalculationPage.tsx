@@ -85,6 +85,7 @@ export default function CalculationPage() {
     const [submitted, setSubmitted] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [result, setResult] = useState<CalculationApiResponse | null>(null);
     const [requestError, setRequestError] = useState('');
     const [loginRequired, setLoginRequired] = useState(false);
@@ -123,6 +124,18 @@ export default function CalculationPage() {
         setLoginRequired(false);
     };
 
+    const toggleOpenEnded = (id: number, openEnded: boolean) => {
+        setValues((current) => ({
+            ...current,
+            particleFractions: current.particleFractions.map((fraction) =>
+                fraction.id === id ? { ...fraction, openEnded, diameterMicron: openEnded ? '' : fraction.diameterMicron } : fraction,
+            ),
+        }));
+        setResult(null);
+        setRequestError('');
+        setLoginRequired(false);
+    };
+
     const addFraction = () => {
         const id = nextFractionId;
         setNextFractionId((current) => current + 1);
@@ -132,7 +145,7 @@ export default function CalculationPage() {
                 ...current,
                 particleFractions: [
                     ...current.particleFractions,
-                    { id, diameterFromMicron: previousUpper, diameterMicron: '', weightPercent: '' },
+                    { id, diameterFromMicron: previousUpper, diameterMicron: '', openEnded: false, weightPercent: '' },
                 ],
             };
         });
@@ -183,6 +196,40 @@ export default function CalculationPage() {
         );
     });
 
+    const getToken = () => {
+        const accessToken = sessionStorage.getItem('accessToken');
+        if (!accessToken) {
+            setRequestError('Bạn cần đăng nhập để gửi yêu cầu tính toán.');
+            setLoginRequired(true);
+        }
+        return accessToken;
+    };
+
+    const handleError = (error: unknown) => {
+        if (error instanceof CalculationApiError) {
+            setRequestError(error.message);
+            setLoginRequired(error.status === 401);
+        } else {
+            setRequestError('Đã xảy ra lỗi khi tính toán. Vui lòng thử lại.');
+        }
+    };
+
+    /** Lưu phương án đang xem: gọi lại API với cùng dữ liệu form nhưng ở chế độ lưu. */
+    const handleSave = async () => {
+        if (Object.keys(errors).length > 0) return;
+        const accessToken = getToken();
+        if (!accessToken) return;
+        setSaving(true);
+        setRequestError('');
+        try {
+            setResult(await submitCalculation(toCalculationPayload(values), accessToken, true));
+        } catch (error) {
+            handleError(error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
         event.preventDefault();
         setSubmitted(true);
@@ -195,24 +242,16 @@ export default function CalculationPage() {
             return;
         }
 
-        const accessToken = sessionStorage.getItem('accessToken');
-        if (!accessToken) {
-            setRequestError('Bạn cần đăng nhập để gửi yêu cầu tính toán.');
-            setLoginRequired(true);
-            return;
-        }
+        const accessToken = getToken();
+        if (!accessToken) return;
 
         setLoading(true);
         try {
             const payload = toCalculationPayload(values);
-            setResult(await submitCalculation(payload, accessToken));
+            // Chỉ tính để xem trước, không tạo phương án trong lịch sử. Lưu bằng nút "Lưu phương án".
+            setResult(await submitCalculation(payload, accessToken, false));
         } catch (error) {
-            if (error instanceof CalculationApiError) {
-                setRequestError(error.message);
-                setLoginRequired(error.status === 401);
-            } else {
-                setRequestError('Đã xảy ra lỗi khi tính toán. Vui lòng thử lại.');
-            }
+            handleError(error);
         } finally {
             setLoading(false);
         }
@@ -307,7 +346,7 @@ export default function CalculationPage() {
                                                     {rowErrors?.diameterFromMicron && <p className="mt-1 text-xs text-red-700" role="alert">{rowErrors.diameterFromMicron}</p>}
                                                 </div>
                                                 <div>
-                                                    <label htmlFor={`fraction-${fraction.id}-to`} className="mb-1 block text-xs font-semibold text-slate-700">Cận trên (µm) *</label>
+                                                    <label htmlFor={`fraction-${fraction.id}-to`} className="mb-1 block text-xs font-semibold text-slate-700">Cận trên (µm){fraction.openEnded ? '' : ' *'}</label>
                                                     <input
                                                         id={`fraction-${fraction.id}-to`}
                                                         type="number"
@@ -315,11 +354,21 @@ export default function CalculationPage() {
                                                         step="any"
                                                         inputMode="decimal"
                                                         value={fraction.diameterMicron}
+                                                        disabled={fraction.openEnded}
                                                         onChange={(event) => changeFraction(fraction.id, 'diameterMicron', event.target.value)}
                                                         aria-invalid={Boolean(rowErrors?.diameterMicron)}
                                                         className={fieldClass(Boolean(rowErrors?.diameterMicron))}
-                                                        placeholder="Ví dụ: 20"
+                                                        placeholder={fraction.openEnded ? 'Không giới hạn' : 'Ví dụ: 20'}
                                                     />
+                                                    <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={fraction.openEnded}
+                                                            onChange={(event) => toggleOpenEnded(fraction.id, event.target.checked)}
+                                                            className="accent-blue-600"
+                                                        />
+                                                        Không giới hạn trên (vd &gt; 60 µm)
+                                                    </label>
                                                     {rowErrors?.diameterMicron && <p className="mt-1 text-xs text-red-700" role="alert">{rowErrors.diameterMicron}</p>}
                                                 </div>
                                                 <div>
@@ -400,7 +449,9 @@ export default function CalculationPage() {
                 <section aria-labelledby="result-title" aria-live="polite" className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm sm:p-7">
                     <div className="flex flex-wrap items-center gap-3">
                         <h2 id="result-title" className="text-xl font-bold text-slate-900">Kết quả</h2>
-                        {result && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">Đã tính và lưu</span>}
+                        {result && (result.projectId != null
+                            ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">Đã tính và lưu</span>
+                            : <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Xem trước, chưa lưu</span>)}
                     </div>
                     <p className="mt-2 text-sm text-slate-600">Kết quả được trả về từ API tính toán.</p>
 
@@ -416,6 +467,19 @@ export default function CalculationPage() {
                         </div>
                     ) : result ? (
                         <div className="mt-6 space-y-5">
+                            {result.projectId == null && (
+                                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                                    <span className="flex-1">Kết quả xem trước, chưa được lưu vào lịch sử.</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                                    >
+                                        {saving ? 'Đang lưu...' : 'Lưu phương án'}
+                                    </button>
+                                </div>
+                            )}
                             <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                                 {result.projectId != null && <>Đã lưu phương án <strong>#{result.projectId}</strong> · </>}Chế độ {result.mode === 'CHECK' ? 'Kiểm tra' : 'Thiết kế'}
                             </p>
@@ -479,7 +543,7 @@ export default function CalculationPage() {
                                         <tbody className="divide-y divide-slate-100">
                                             {result.fractions.map((f, index) => (
                                                 <tr key={index} className="align-top">
-                                                    <td className="px-3 py-2 font-medium">{fmt(f.dFromUm, 0)} – {fmt(f.dToUm, 0)}</td>
+                                                    <td className="px-3 py-2 font-medium">{f.dToUm == null ? `> ${fmt(f.dFromUm, 0)}` : `${fmt(f.dFromUm, 0)} – ${fmt(f.dToUm, 0)}`}</td>
                                                     <td className="px-3 py-2 text-right">{fmt(f.massPercent, 1)}</td>
                                                     <td className="px-3 py-2 text-right">{fmt(f.settlingVelocityMS, 4)}</td>
                                                     <td className="px-3 py-2 text-right">{fmt(f.efficiencyPercent, 1)}</td>

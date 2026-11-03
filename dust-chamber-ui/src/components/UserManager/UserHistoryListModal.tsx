@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import HistoryDetailModal from '../History/HistoryDetailModal';
+import { API_URL } from '../../config';
 
 export interface ProjectSummary {
     id: number;
@@ -32,7 +33,7 @@ const UserHistoryListModal: React.FC<UserHistoryListModalProps> = ({ userId, onC
             setError(null);
             try {
                 const token = sessionStorage.getItem('accessToken');
-                const response = await fetch(`http://localhost:3001/api/history/user/${userId}`, {
+                const response = await fetch(`${API_URL}/api/history/user/${userId}`, {
                     headers: {
                         'method': "GET",
                         'Authorization': `Bearer ${token}`

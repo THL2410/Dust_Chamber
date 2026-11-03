@@ -1,4 +1,5 @@
 export type DesignMode = 'CHECK' | 'DESIGN';
+import { API_URL } from '../../config';
 
 export type NumericField =
     | 'flow_rate_m3_h'
@@ -24,6 +25,8 @@ export interface ParticleFractionForm {
     id: number;
     diameterFromMicron: string;
     diameterMicron: string;
+    /** Dải không giới hạn trên (vd > 60 µm): chỉ nhập cận dưới */
+    openEnded: boolean;
     weightPercent: string;
 }
 
@@ -55,7 +58,8 @@ export interface CalculationPayload {
     fanEfficiency?: number;
     particleFractions: {
         diameterFromMicron?: number;
-        diameterMicron: number;
+        diameterMicron?: number;
+        openEnded?: boolean;
         weightPercent: number;
     }[];
 }
@@ -71,7 +75,8 @@ export interface CollectorSuggestion {
 
 export interface FractionView {
     dFromUm: number;
-    dToUm: number;
+    /** null = dải không giới hạn trên */
+    dToUm: number | null;
     massPercent: number;
     dRepUm: number;
     settlingVelocityMS: number;
@@ -147,7 +152,7 @@ export const initialValues: CalculationFormValues = {
     local_resistance_sum: '0',
     chamber_pressure_drop_pa: '245',
     fan_efficiency: '0.6',
-    particleFractions: [{ id: 1, diameterFromMicron: '0', diameterMicron: '', weightPercent: '' }],
+    particleFractions: [{ id: 1, diameterFromMicron: '0', diameterMicron: '', openEnded: false, weightPercent: '' }],
 };
 
 type Rule = { label: string; min?: number; max?: number; exclusiveMin?: boolean };
@@ -232,7 +237,11 @@ export function validateCalculation(values: CalculationFormValues): CalculationE
         if (fromRaw !== '' && (!Number.isFinite(from) || from! < 0)) {
             rowErrors.diameterFromMicron = 'Cận dưới phải là số từ 0 trở lên.';
         }
-        if (to === undefined) {
+        if (fraction.openEnded) {
+            if (from === undefined || !Number.isFinite(from) || from <= 0) {
+                rowErrors.diameterFromMicron = 'Dải không giới hạn trên cần cận dưới lớn hơn 0.';
+            }
+        } else if (to === undefined) {
             rowErrors.diameterMicron = 'Vui lòng nhập cận trên.';
         } else if (!Number.isFinite(to) || to <= 0) {
             rowErrors.diameterMicron = 'Cận trên phải lớn hơn 0.';
@@ -305,7 +314,7 @@ export function toCalculationPayload(values: CalculationFormValues): Calculation
         const from = fraction.diameterFromMicron.trim();
         return {
             ...(from === '' ? {} : { diameterFromMicron: Number(from) }),
-            diameterMicron: Number(fraction.diameterMicron),
+            ...(fraction.openEnded ? { openEnded: true } : { diameterMicron: Number(fraction.diameterMicron) }),
             weightPercent: Number(fraction.weightPercent),
         };
     });
@@ -321,13 +330,18 @@ function getApiErrorMessage(body: unknown): string | undefined {
     return undefined;
 }
 
+/**
+ * save = false: gọi /design/preview, chỉ tính, KHÔNG lưu vào lịch sử.
+ * save = true: gọi /design, tính và lưu thành phương án mới.
+ */
 export async function submitCalculation(
     payload: CalculationPayload,
     accessToken: string,
+    save = false,
 ): Promise<CalculationApiResponse> {
     let response: Response;
     try {
-        response = await fetch('http://localhost:3001/api/calculations/design', {
+        response = await fetch(`${API_URL}/api/calculations/design${save ? '' : '/preview'}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

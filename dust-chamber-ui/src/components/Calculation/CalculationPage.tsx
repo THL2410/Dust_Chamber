@@ -127,15 +127,14 @@ export default function CalculationPage() {
 
     useEffect(() => {
         if (!editId) return;
-        const accessToken = sessionStorage.getItem('accessToken');
-        if (!accessToken) {
-            setRequestError('Bạn cần đăng nhập để sửa phương án.');
-            setLoginRequired(true);
-            setLoadingSaved(false);
-            return;
-        }
         let cancelled = false;
-        fetchSavedCalculation(editId, accessToken)
+        const accessToken = sessionStorage.getItem('accessToken');
+        // Chưa đăng nhập: đi cùng đường .catch bên dưới (cùng thông báo, cùng loginRequired = true)
+        // thay vì gọi setState trực tiếp trong thân effect.
+        const request = accessToken
+            ? fetchSavedCalculation(editId, accessToken)
+            : Promise.reject(new CalculationApiError('Bạn cần đăng nhập để sửa phương án.', 401));
+        request
             .then((saved) => {
                 if (cancelled) return;
                 setValues(saved);

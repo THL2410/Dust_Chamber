@@ -7,7 +7,7 @@ import { DesignResults } from './entities/DesignResults';
 import { CreateCalculationDto } from './dto/create-calculation.dto';
 import { UpdateCalculationDto } from './dto/update-calculation.dto';
 import { calculateDesign } from './design-calculation';
-import { fractionRowToPayload, mergeCalculationUpdate, type InputPatch } from './calculation-merge';
+import { fractionRowToPayload, mergeCalculationUpdate } from './calculation-merge';
 import { CALCULATION_CONSTANTS as K } from './calculations.constants';
 
 /** Cận trên giả định khi tìm thiết bị gợi ý cho dải không giới hạn trên */
@@ -202,15 +202,15 @@ export class CalculationsService {
       let merged;
       try {
         merged = mergeCalculationUpdate(
-          stored as unknown as InputPatch,
+          stored,
           rows.map(fractionRowToPayload),
-          dto as unknown as InputPatch & { particleFractions?: CreateCalculationDto['particleFractions'] | null },
+          dto,
         );
       } catch (e) {
         throw new BadRequestException((e as Error).message);
       }
       // compute() chỉ đọc giá trị rỗng qua ?? / truthy nên null từ merged dùng được như "không nhập"
-      const { inputValues, calc } = this.compute(merged as unknown as CreateCalculationDto);
+      const { inputValues, calc } = this.compute(merged);
 
       await manager.update(DesignProjects, { id }, {
         name: dto.name || project.name,

@@ -132,6 +132,9 @@ export interface CalculationApiResponse {
     fractions: FractionView[];
 }
 
+/** Gửi khi sửa phương án đã lưu: trường để trống phải là null thì backend mới xóa giá trị cũ. */
+export type CalculationUpdatePayload = { [K in keyof CalculationPayload]: CalculationPayload[K] | null };
+
 export class CalculationApiError extends Error {
     readonly status: number;
 
@@ -374,6 +377,65 @@ export function toCalculationPayload(values: CalculationFormValues): Calculation
     return payload;
 }
 
+/** Payload cho PATCH: các ô tùy chọn bị xóa trong form được gửi null (không gửi = backend giữ giá trị cũ). */
+export function toUpdatePayload(values: CalculationFormValues): CalculationUpdatePayload {
+    const payload = toCalculationPayload(values);
+    return {
+        ...payload,
+        dustConcentrationGM3: payload.dustConcentrationGM3 ?? null,
+        dMinTargetUm: payload.dMinTargetUm ?? null,
+        chamberHeightM: payload.chamberHeightM ?? null,
+        chamberLengthM: payload.chamberLengthM ?? null,
+        chamberWidthM: payload.chamberWidthM ?? null,
+        pipeDiameterM: payload.pipeDiameterM ?? null,
+    };
+}
+
+type SavedRow = Record<string, unknown>;
+const text = (value: unknown, fallback = '') =>
+    value === null || value === undefined || value === '' ? fallback : String(Number.isFinite(Number(value)) ? Number(value) : value);
+
+/** Chuyển kết quả GET /api/history/:id ({ project, input, fractions }) thành giá trị form để sửa. */
+export function savedToFormValues(data: unknown): CalculationFormValues {
+    const saved = (data && typeof data === 'object' ? data : {}) as { project?: SavedRow; input?: SavedRow | null; fractions?: SavedRow[] };
+    const input = saved.input ?? {};
+    const blankWhenNull: NumericField[] = ['dust_concentration_g_m3', ...optionalFields];
+    const next = { ...initialValues } as CalculationFormValues;
+    for (const key of Object.keys(rules) as NumericField[]) {
+        next[key] = text(input[key], blankWhenNull.includes(key) ? '' : initialValues[key]);
+    }
+    next.mode = saved.project?.mode === 'DESIGN' ? 'DESIGN' : 'CHECK';
+    const rows = Array.isArray(saved.fractions) ? saved.fractions : [];
+    next.particleFractions = rows.length === 0
+        ? initialValues.particleFractions
+        : rows.map((row, index) => ({
+            id: index + 1,
+            diameterFromMicron: text(row.d_from_um, '0'),
+            // d_to_um null = dải không giới hạn trên (> d_from)
+            diameterMicron: row.d_to_um == null ? '' : text(row.d_to_um),
+            openEnded: row.d_to_um == null,
+            weightPercent: text(row.mass_percent),
+        }));
+    return next;
+}
+
+/** Đọc phương án đã lưu của chính người dùng để đổ vào form. */
+export async function fetchSavedCalculation(id: string, accessToken: string): Promise<CalculationFormValues> {
+    let response: Response;
+    try {
+        response = await fetch(`${API_URL}/api/history/${encodeURIComponent(id)}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+    } catch {
+        throw new CalculationApiError('Không thể kết nối máy chủ. Hãy kiểm tra backend rồi thử lại.', 0);
+    }
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+        throw new CalculationApiError(getApiErrorMessage(body) || 'Không thể lấy dữ liệu phương án cũ.', response.status);
+    }
+    return savedToFormValues(body);
+}
+
 function getApiErrorMessage(body: unknown): string | undefined {
     if (!body || typeof body !== 'object' || !('message' in body)) return undefined;
     const message = body.message;
@@ -385,16 +447,20 @@ function getApiErrorMessage(body: unknown): string | undefined {
 /**
  * save = false: gọi /design/preview, chỉ tính, KHÔNG lưu vào lịch sử.
  * save = true: gọi /design, tính và lưu thành phương án mới.
+ * save = true kèm editId: gọi PATCH /design/:id, tính lại và ghi đè phương án đó (giữ nguyên ID).
  */
 export async function submitCalculation(
-    payload: CalculationPayload,
+    payload: CalculationPayload | CalculationUpdatePayload,
     accessToken: string,
     save = false,
+    editId?: string | null,
 ): Promise<CalculationApiResponse> {
+    const updating = save && !!editId;
     let response: Response;
     try {
-        response = await fetch(`${API_URL}/api/calculations/design${save ? '' : '/preview'}`, {
-            method: 'POST',
+        const path = updating ? `design/${encodeURIComponent(editId)}` : save ? 'design' : 'design/preview';
+        response = await fetch(`${API_URL}/api/calculations/${path}`, {
+            method: updating ? 'PATCH' : 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${accessToken}`,

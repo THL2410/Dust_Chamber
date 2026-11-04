@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import HistoryDetailModal from './HistoryDetailModal';
 import { API_URL } from '../../config';
 
@@ -12,6 +13,7 @@ export interface HistoryItem {
 }
 
 const HistoryPage = () => {
+    const navigate = useNavigate();
     const [histories, setHistories] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -81,6 +83,10 @@ const HistoryPage = () => {
         setSelectedId(id);
         setSelectedTab(tab);
         setIsModalOpen(true);
+    };
+
+    const handleEdit = (id: number) => {
+        navigate(`/calculate?editId=${id}`);
     };
 
     const handleDelete = async (id: number) => {
@@ -204,7 +210,13 @@ const HistoryPage = () => {
                                     </button>
                                 </td>
 
-                                <td className="py-3 px-4 text-center">
+                                <td className="py-3 px-4 text-center space-y-2">
+                                    <button
+                                        onClick={() => handleEdit(item.id)}
+                                        className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 transition inline-flex items-center space-x-1 w-full justify-center text-xs font-medium"
+                                    >
+                                        <span>✏️ Sửa</span>
+                                    </button>
                                     <button
                                         onClick={() => handleDelete(item.id)}
                                         className="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded hover:bg-red-100 transition inline-flex items-center space-x-1 w-full justify-center text-xs font-medium"

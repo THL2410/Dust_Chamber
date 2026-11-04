@@ -1,0 +1,15 @@
+.gas-flow {
+    animation: gas-flow-dash 1s linear infinite;
+}
+
+@keyframes gas-flow-dash {
+    to {
+        stroke-dashoffset: -50;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gas-flow {
+        animation: none;
+    }
+}

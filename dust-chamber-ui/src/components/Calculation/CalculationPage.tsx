@@ -1,13 +1,16 @@
-import { useState, type SubmitEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import DustMotionModal from './DustMotionModal';
 import {
     CalculationApiError,
     NO_DATA,
     SETTLER_MIN_UM,
     initialValues,
+    fetchSavedCalculation,
     isBlankFraction,
     submitCalculation,
     toCalculationPayload,
+    toUpdatePayload,
     validateCalculation,
     type CalculationFormValues,
     type CalculationApiResponse,
@@ -93,6 +96,11 @@ function ResultCard({ label, value, unit, accent, digits = 2 }: { label: string;
 }
 
 export default function CalculationPage() {
+    // /calculate?editId=12: mở phương án đã lưu để sửa (lưu sẽ ghi đè phương án đó, giữ nguyên ID)
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get('editId');
+    const [loadingSaved, setLoadingSaved] = useState(!!editId);
+    const [motionOpen, setMotionOpen] = useState(false);
     const [values, setValues] = useState<CalculationFormValues>(initialValues);
     const [touched, setTouched] = useState<Partial<Record<NumericField, boolean>>>({});
     const [submitted, setSubmitted] = useState(false);
@@ -111,9 +119,40 @@ export default function CalculationPage() {
     // Chế độ thiết kế: chưa điền dải nào thì phân bố hạt coi như bỏ qua
     const fractionsOptionalAndEmpty = values.mode === 'DESIGN' && values.particleFractions.every(isBlankFraction);
 
+    const closeMotion = useCallback(() => setMotionOpen(false), []);
+    const clearResult = () => {
+        setResult(null);
+        setMotionOpen(false);
+    };
+
+    useEffect(() => {
+        if (!editId) return;
+        const accessToken = sessionStorage.getItem('accessToken');
+        if (!accessToken) {
+            setRequestError('Bạn cần đăng nhập để sửa phương án.');
+            setLoginRequired(true);
+            setLoadingSaved(false);
+            return;
+        }
+        let cancelled = false;
+        fetchSavedCalculation(editId, accessToken)
+            .then((saved) => {
+                if (cancelled) return;
+                setValues(saved);
+                setNextFractionId(saved.particleFractions.length + 1);
+            })
+            .catch((error: unknown) => {
+                if (cancelled) return;
+                setRequestError(error instanceof CalculationApiError ? error.message : 'Không thể lấy thông số cũ.');
+                setLoginRequired(error instanceof CalculationApiError && error.status === 401);
+            })
+            .finally(() => { if (!cancelled) setLoadingSaved(false); });
+        return () => { cancelled = true; };
+    }, [editId]);
+
     const changeField = (key: NumericField, value: string) => {
         setValues((current) => ({ ...current, [key]: value }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -122,7 +161,7 @@ export default function CalculationPage() {
         setValues((current) => ({ ...current, mode }));
         setTouched({});
         setSubmitted(false);
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -134,7 +173,7 @@ export default function CalculationPage() {
                 fraction.id === id ? { ...fraction, [field]: value } : fraction,
             ),
         }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -146,7 +185,7 @@ export default function CalculationPage() {
                 fraction.id === id ? { ...fraction, openEnded, diameterMicron: openEnded ? '' : fraction.diameterMicron } : fraction,
             ),
         }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -164,7 +203,7 @@ export default function CalculationPage() {
                 ],
             };
         });
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -174,7 +213,7 @@ export default function CalculationPage() {
             ...current,
             particleFractions: current.particleFractions.filter((fraction) => fraction.id !== id),
         }));
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
     };
@@ -237,7 +276,9 @@ export default function CalculationPage() {
         setSaving(true);
         setRequestError('');
         try {
-            setResult(await submitCalculation(toCalculationPayload(values), accessToken, true));
+            setResult(editId
+                ? await submitCalculation(toUpdatePayload(values), accessToken, true, editId)
+                : await submitCalculation(toCalculationPayload(values), accessToken, true));
         } catch (error) {
             handleError(error);
         } finally {
@@ -248,7 +289,7 @@ export default function CalculationPage() {
     const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
         event.preventDefault();
         setSubmitted(true);
-        setResult(null);
+        clearResult();
         setRequestError('');
         setLoginRequired(false);
 
@@ -276,7 +317,7 @@ export default function CalculationPage() {
         <main className="mx-auto max-w-7xl space-y-6 px-2 py-4 sm:px-4 lg:py-8">
             <header className="rounded-2xl bg-slate-900 px-6 py-7 text-white sm:px-8">
                 <p className="text-sm font-semibold uppercase tracking-widest text-sky-300">Buồng lắng bụi</p>
-                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Nhập thông số thiết kế</h1>
+                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{editId ? `Sửa phương án #${editId}` : 'Nhập thông số thiết kế'}</h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
                     Chọn chế độ, điền thông số và gửi yêu cầu tính toán đến máy chủ.
                 </p>
@@ -284,7 +325,7 @@ export default function CalculationPage() {
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] lg:items-start">
                 <form onSubmit={handleSubmit} noValidate className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-                    <fieldset disabled={loading} className="space-y-8 disabled:opacity-70">
+                    <fieldset disabled={loading || loadingSaved} className="space-y-8 disabled:opacity-70">
                         <section aria-labelledby="mode-title">
                             <h2 id="mode-title" className="text-lg font-bold text-slate-900">Chế độ tính toán</h2>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -492,14 +533,14 @@ export default function CalculationPage() {
                         <div className="mt-6 space-y-5">
                             {result.projectId == null && (
                                 <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                                    <span className="flex-1">Kết quả xem trước, chưa được lưu vào lịch sử.</span>
+                                    <span className="flex-1">{editId ? `Kết quả xem trước, chưa ghi đè phương án #${editId}.` : 'Kết quả xem trước, chưa được lưu vào lịch sử.'}</span>
                                     <button
                                         type="button"
                                         onClick={handleSave}
                                         disabled={saving}
                                         className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
                                     >
-                                        {saving ? 'Đang lưu...' : 'Lưu phương án'}
+                                        {saving ? 'Đang lưu...' : editId ? 'Lưu thay đổi' : 'Lưu phương án'}
                                     </button>
                                 </div>
                             )}
@@ -511,6 +552,14 @@ export default function CalculationPage() {
                                     ? `Đạt: buồng giữ lại hoàn toàn hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên (chọn d_min = ${fmt(result.result.dLimitUm, 0)} µm).`
                                     : `Chưa đạt: buồng chỉ giữ được hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên.`}
                             </p>
+                            <button
+                                type="button"
+                                onClick={() => setMotionOpen(true)}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-5 py-3 font-semibold text-sky-800 transition hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 sm:w-auto"
+                            >
+                                <span aria-hidden="true">↗</span>
+                                Xem mô tả chuyển động
+                            </button>
                             <div>
                                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600">Kích thước buồng</h3>
                                 <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
@@ -612,6 +661,7 @@ export default function CalculationPage() {
                     )}
                 </section>
             </div>
+            {result && motionOpen && <DustMotionModal result={result} onClose={closeMotion} />}
         </main>
     );
 }

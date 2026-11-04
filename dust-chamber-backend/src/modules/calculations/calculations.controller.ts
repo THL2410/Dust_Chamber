@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Delete,
+  Patch,
   Body,
   Param,
   ParseIntPipe,
@@ -18,6 +19,7 @@ import {
 
 import { CalculationsService } from './calculations.service';
 import { CreateCalculationDto } from './dto/create-calculation.dto';
+import { UpdateCalculationDto } from './dto/update-calculation.dto';
 
 import {
   CurrentUser,
@@ -100,6 +102,20 @@ export class CalculationsController {
     const userId = Number(user.id);
 
     return this.calcService.calculateAndSave(userId, dto);
+  }
+
+  @Patch('design/:id')
+  @ApiOperation({
+    summary:
+      'Sửa phương án đã lưu: trường không gửi giữ nguyên, trường gửi null thì xóa, particleFractions gửi thì thay toàn bộ. Tính lại bằng công thức hiện tại và giữ nguyên ID',
+  })
+  @ApiBody({ type: UpdateCalculationDto })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCalculationDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.calcService.update(id, Number(user.id), dto);
   }
 
   // @Get('history')

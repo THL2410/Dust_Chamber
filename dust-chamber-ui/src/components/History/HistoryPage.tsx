@@ -9,8 +9,8 @@ export interface HistoryItem {
     name: string;
     createdAt?: string;
     created_at?: string;
-    updatedAt?: string;  // Đã thêm
-    updated_at?: string; // Đã thêm
+    updatedAt?: string;
+    updated_at?: string;
     eta_total_percent?: number | null;
 }
 
@@ -166,9 +166,9 @@ const HistoryPage = () => {
                     </thead>
                     <tbody className="text-gray-600 text-sm font-light">
                     {loading ? (
-                        <tr><td colSpan={9} className="text-center py-8 font-medium">Đang tải dữ liệu...</td></tr> // Đổi 8 thành 9
+                        <tr><td colSpan={9} className="text-center py-8 font-medium">Đang tải dữ liệu...</td></tr>
                     ) : histories.length === 0 ? (
-                        <tr><td colSpan={9} className="text-center py-8 font-medium text-red-500">Không tìm thấy dữ liệu phù hợp</td></tr> // Đổi 8 thành 9
+                        <tr><td colSpan={9} className="text-center py-8 font-medium text-red-500">Không tìm thấy dữ liệu phù hợp</td></tr>
                     ) : (
                         histories.map((item, index) => (
                             <tr key={item.id} className="border-b border-gray-200 hover:bg-gray-50 transition">

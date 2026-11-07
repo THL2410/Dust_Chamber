@@ -126,12 +126,14 @@ export class HistoryService {
         `SELECT COUNT(*)::int AS total FROM v_design_summary v LEFT JOIN users u ON v.user_id = u.id ${where}`, values,
     );
     const data = await this.db.query(
-        `SELECT ${SUMMARY_COLUMNS}
-         FROM v_design_summary v LEFT JOIN users u ON v.user_id = u.id
-         ${where}
+        `SELECT ${SUMMARY_COLUMNS}, dp.updated_at
+         FROM v_design_summary v
+                LEFT JOIN users u ON v.user_id = u.id
+                LEFT JOIN design_projects dp ON v.id = dp.id
+           ${where}
          ORDER BY ${sort} ${direction} NULLS LAST, v.id DESC
-         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-        [...values, limit, (page - 1) * limit], // Đã sửa (page - 1)
+           LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+        [...values, limit, (page - 1) * limit],
     );
     const total = count?.total ?? 0;
     return { data, meta: {

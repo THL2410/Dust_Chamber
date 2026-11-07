@@ -9,6 +9,8 @@ export interface HistoryItem {
     name: string;
     createdAt?: string;
     created_at?: string;
+    updatedAt?: string;  // Đã thêm
+    updated_at?: string; // Đã thêm
     eta_total_percent?: number | null;
 }
 
@@ -155,6 +157,7 @@ const HistoryPage = () => {
                         <th className="py-3 px-4 border-b">Chủ sở hữu</th>
                         <th className="py-3 px-4 border-b">Tên dự án</th>
                         <th className="py-3 px-4 border-b">Ngày tạo</th>
+                        <th className="py-3 px-4 border-b">Cập nhật lần cuối</th> {/* Đã thêm */}
                         <th className="py-3 px-4 border-b text-center w-50">Thông số đầu vào</th>
                         <th className="py-3 px-4 border-b text-center w-50">Kết quả tính toán</th>
                         <th className="py-3 px-4 border-b text-center w-50">Kết quả dải bụi</th>
@@ -163,9 +166,9 @@ const HistoryPage = () => {
                     </thead>
                     <tbody className="text-gray-600 text-sm font-light">
                     {loading ? (
-                        <tr><td colSpan={8} className="text-center py-8 font-medium">Đang tải dữ liệu...</td></tr>
+                        <tr><td colSpan={9} className="text-center py-8 font-medium">Đang tải dữ liệu...</td></tr> // Đổi 8 thành 9
                     ) : histories.length === 0 ? (
-                        <tr><td colSpan={8} className="text-center py-8 font-medium text-red-500">Không tìm thấy dữ liệu phù hợp</td></tr>
+                        <tr><td colSpan={9} className="text-center py-8 font-medium text-red-500">Không tìm thấy dữ liệu phù hợp</td></tr> // Đổi 8 thành 9
                     ) : (
                         histories.map((item, index) => (
                             <tr key={item.id} className="border-b border-gray-200 hover:bg-gray-50 transition">
@@ -180,7 +183,11 @@ const HistoryPage = () => {
                                     {formatDate(item.createdAt || item.created_at)}
                                 </td>
 
-                                {/* NÚT 1: THÔNG SỐ ĐẦU VÀO -> Truyền 'input' */}
+                                <td className="py-3 px-4 text-gray-700">
+                                    {formatDate(item.updatedAt || item.updated_at || item.createdAt || item.created_at)}
+                                </td>
+
+                                {/* NÚT 1: THÔNG SỐ ĐẦU VÀO */}
                                 <td className="py-3 px-4 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id, 'input')}
@@ -190,7 +197,7 @@ const HistoryPage = () => {
                                     </button>
                                 </td>
 
-                                {/* NÚT 2: KẾT QUẢ TÍNH TOÁN -> Truyền 'result' */}
+                                {/* NÚT 2: KẾT QUẢ TÍNH TOÁN */}
                                 <td className="py-3 px-4 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id, 'result')}
@@ -200,7 +207,7 @@ const HistoryPage = () => {
                                     </button>
                                 </td>
 
-                                {/* NÚT 3: KẾT QUẢ DẢI BỤI -> Truyền 'fraction' */}
+                                {/* NÚT 3: KẾT QUẢ DẢI BỤI */}
                                 <td className="py-3 px-4 text-center">
                                     <button
                                         onClick={() => handleOpenDetail(item.id, 'fraction')}

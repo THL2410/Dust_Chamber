@@ -96,7 +96,6 @@ function ResultCard({ label, value, unit, accent, digits = 2 }: { label: string;
 }
 
 export default function CalculationPage() {
-    // /calculate?editId=12: mở phương án đã lưu để sửa (lưu sẽ ghi đè phương án đó, giữ nguyên ID)
     const [searchParams] = useSearchParams();
     const editId = searchParams.get('editId');
     const [loadingSaved, setLoadingSaved] = useState(!!editId);
@@ -116,7 +115,6 @@ export default function CalculationPage() {
         (total, fraction) => total + (Number(fraction.weightPercent) || 0),
         0,
     );
-    // Chế độ thiết kế: chưa điền dải nào thì phân bố hạt coi như bỏ qua
     const fractionsOptionalAndEmpty = values.mode === 'DESIGN' && values.particleFractions.every(isBlankFraction);
 
     const closeMotion = useCallback(() => setMotionOpen(false), []);
@@ -129,8 +127,6 @@ export default function CalculationPage() {
         if (!editId) return;
         let cancelled = false;
         const accessToken = sessionStorage.getItem('accessToken');
-        // Chưa đăng nhập: đi cùng đường .catch bên dưới (cùng thông báo, cùng loginRequired = true)
-        // thay vì gọi setState trực tiếp trong thân effect.
         const request = accessToken
             ? fetchSavedCalculation(editId, accessToken)
             : Promise.reject(new CalculationApiError('Bạn cần đăng nhập để sửa phương án.', 401));
@@ -267,11 +263,15 @@ export default function CalculationPage() {
         }
     };
 
-    /** Lưu phương án đang xem: gọi lại API với cùng dữ liệu form nhưng ở chế độ lưu. */
     const handleSave = async () => {
+        setSubmitted(true);
+        // Bắt lỗi bắt buộc nhập Tên dự án
+        if (!values.name.trim()) return;
         if (Object.keys(errors).length > 0) return;
+
         const accessToken = getToken();
         if (!accessToken) return;
+
         setSaving(true);
         setRequestError('');
         try {
@@ -292,6 +292,9 @@ export default function CalculationPage() {
         setRequestError('');
         setLoginRequired(false);
 
+        // Bắt lỗi bắt buộc nhập Tên dự án
+        if (!values.name.trim()) return;
+
         if (Object.keys(errors).length > 0) {
             if (advancedFields.some(({ key }) => errors[key])) setAdvancedOpen(true);
             return;
@@ -303,7 +306,6 @@ export default function CalculationPage() {
         setLoading(true);
         try {
             const payload = toCalculationPayload(values);
-            // Chỉ tính để xem trước, không tạo phương án trong lịch sử. Lưu bằng nút "Lưu phương án".
             setResult(await submitCalculation(payload, accessToken, false));
         } catch (error) {
             handleError(error);
@@ -325,6 +327,28 @@ export default function CalculationPage() {
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] lg:items-start">
                 <form onSubmit={handleSubmit} noValidate className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
                     <fieldset disabled={loading || loadingSaved} className="space-y-8 disabled:opacity-70">
+
+                        {/* TRƯỜNG NHẬP TÊN DỰ ÁN */}
+                        <section aria-labelledby="name-title">
+                            <h2 id="name-title" className="text-lg font-bold text-slate-900">Thông tin dự án</h2>
+                            <div className="mt-3 min-w-0">
+                                <label htmlFor="project_name" className="mb-1.5 block text-sm font-semibold text-slate-700">
+                                    Tên dự án thiết kế <span className="ml-1 text-red-600" aria-hidden="true">*</span>
+                                </label>
+                                <input
+                                    id="project_name"
+                                    type="text"
+                                    value={values.name}
+                                    onChange={(event) => setValues(current => ({ ...current, name: event.target.value }))}
+                                    className={`w-full rounded-xl border bg-white px-3.5 py-2.5 text-slate-900 outline-none transition focus:ring-2 ${submitted && !values.name.trim() ? 'border-red-400 focus:ring-red-200' : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'}`}
+                                    placeholder="Ví dụ: Thiết kế buồng lắng khói lò hơi số 1"
+                                />
+                                {submitted && !values.name.trim() && (
+                                    <p className="mt-1 text-sm text-red-700" role="alert">Vui lòng nhập tên dự án để tiện lưu trữ.</p>
+                                )}
+                            </div>
+                        </section>
+
                         <section aria-labelledby="mode-title">
                             <h2 id="mode-title" className="text-lg font-bold text-slate-900">Chế độ tính toán</h2>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -604,9 +628,9 @@ export default function CalculationPage() {
                                         {NO_DATA}: chưa nhập phân bố cỡ hạt.
                                     </p>
                                 ) : (
-                                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                                    <table className="w-full min-w-[640px] text-left text-sm">
-                                        <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                                        <table className="w-full min-w-[640px] text-left text-sm">
+                                            <thead className="bg-slate-100 text-xs uppercase text-slate-600">
                                             <tr>
                                                 <th className="px-3 py-2">Cỡ hạt (µm)</th>
                                                 <th className="px-3 py-2 text-right">% KL</th>
@@ -615,8 +639,8 @@ export default function CalculationPage() {
                                                 <th className="px-3 py-2 text-right">Cb ra (g/m³)</th>
                                                 <th className="px-3 py-2">Phân loại</th>
                                             </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
                                             {result.fractions.map((f, index) => (
                                                 <tr key={index} className="align-top">
                                                     <td className="px-3 py-2 font-medium">{f.dToUm == null ? `> ${fmt(f.dFromUm, 0)}` : `${fmt(f.dFromUm, 0)} – ${fmt(f.dToUm, 0)}`}</td>
@@ -636,9 +660,9 @@ export default function CalculationPage() {
                                                     </td>
                                                 </tr>
                                             ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 )}
                                 <p className="mt-2 text-xs text-slate-500">
                                     Hạt nhỏ hơn {SETTLER_MIN_UM} µm không phù hợp buồng lắng nên không tính hiệu suất, chỉ gợi ý thiết bị lọc bụi khác.

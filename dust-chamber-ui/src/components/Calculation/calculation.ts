@@ -30,7 +30,7 @@ export interface ParticleFractionForm {
     weightPercent: string;
 }
 
-export type CalculationFormValues = { mode: DesignMode; particleFractions: ParticleFractionForm[] } & Record<NumericField, string>;
+export type CalculationFormValues = { name: string ;mode: DesignMode; particleFractions: ParticleFractionForm[] } & Record<NumericField, string>;
 /** Hiển thị cho mọi mục không có số liệu (API trả null) */
 export const NO_DATA = 'Không có số liệu';
 
@@ -44,6 +44,7 @@ export type CalculationErrors = Partial<Record<NumericField, string>> & {
 };
 
 export interface CalculationPayload {
+    name?: string;
     flowRateM3H: number;
     temperatureC: number;
     /** Bỏ trống được ở chế độ DESIGN */
@@ -146,6 +147,7 @@ export class CalculationApiError extends Error {
 }
 
 export const initialValues: CalculationFormValues = {
+    name: '',
     mode: 'CHECK',
     flow_rate_m3_h: '',
     temperature_c: '',
@@ -330,6 +332,7 @@ function numericValue(values: CalculationFormValues, key: NumericField): number 
 
 export function toCalculationPayload(values: CalculationFormValues): CalculationPayload {
     const payload: CalculationPayload = {
+        name: values.name.trim() || undefined,
         flowRateM3H: Number(values.flow_rate_m3_h),
         temperatureC: Number(values.temperature_c),
         dustDensityKgM3: Number(values.dust_density_kg_m3),
@@ -404,6 +407,7 @@ export function savedToFormValues(data: unknown): CalculationFormValues {
     for (const key of Object.keys(rules) as NumericField[]) {
         next[key] = text(input[key], blankWhenNull.includes(key) ? '' : initialValues[key]);
     }
+    next.name = text(saved.project?.name, '');
     next.mode = saved.project?.mode === 'DESIGN' ? 'DESIGN' : 'CHECK';
     const rows = Array.isArray(saved.fractions) ? saved.fractions : [];
     next.particleFractions = rows.length === 0

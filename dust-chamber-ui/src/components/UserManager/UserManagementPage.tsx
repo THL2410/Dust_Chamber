@@ -97,7 +97,7 @@ const UserManagementPage = () => {
     const handleDelete = async (id: string | number) => {
         if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
             try {
-                const token = localStorage.getItem('accessToken');
+                const token = sessionStorage.getItem('accessToken');
 
                 const response = await fetch(`${API_URL}/api/users/${id}`, {
                     method: 'DELETE',

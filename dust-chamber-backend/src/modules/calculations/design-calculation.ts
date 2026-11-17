@@ -191,7 +191,7 @@ export function calculateDesign(i: DesignCalcInput): DesignCalcOutput {
   } else {
     v = Q / (B * H); // B3
     const dCalc = Math.sqrt((18 * mu * Q) / (dRho * g * B * L)) * 1e6;
-    dLimit = Math.ceil(dCalc / 5) * 5; // làm tròn lên bội số 5 μm
+    dLimit = dCalc;
     uSettle = settle(dLimit);
   }
 

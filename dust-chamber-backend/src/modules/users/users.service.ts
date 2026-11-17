@@ -19,7 +19,7 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const { password, email, ...restData } = createUserDto;
+    const { password, email, role, ...restData } = createUserDto;
     const normalizedEmail = email.trim().toLowerCase();
 
     const existingUser = await this.usersRepository.findOne({
@@ -36,7 +36,7 @@ export class UsersService {
       email: normalizedEmail,
       passwordHash,
       ...restData,
-      role: "user",
+      role: role as UserRole,
     });
     const savedUser = await this.usersRepository.save(newUser);
 

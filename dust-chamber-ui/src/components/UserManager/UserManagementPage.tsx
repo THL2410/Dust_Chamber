@@ -18,6 +18,11 @@ const UserManagementPage = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Bộ lọc thu gọn đồng bộ với HistoryPage
+    const [roleFilter, setRoleFilter] = useState<string>('');
+    const [statusFilter, setStatusFilter] = useState<string>('');
+    const [showFilters, setShowFilters] = useState(false);
+
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedEditUser, setSelectedEditUser] = useState<UserItem | null>(null);
@@ -25,7 +30,10 @@ const UserManagementPage = () => {
     const [isUserHistoryListModalOpen, setIsUserHistoryListModalOpen] = useState(false);
     const [selectedUserIdForHistory, setSelectedUserIdForHistory] = useState<number | string | null>(null);
 
+    const hasActiveFilters = Boolean(roleFilter || statusFilter);
+
     const fetchUsers = async () => {
+        setLoading(true);
         try {
             const token = sessionStorage.getItem('accessToken');
             const response = await fetch(`${API_URL}/api/users`, {
@@ -57,6 +65,12 @@ const UserManagementPage = () => {
             fetchUsers();
         }, 0);
     }, []);
+
+    const handleResetFilters = () => {
+        setSearchTerm('');
+        setRoleFilter('');
+        setStatusFilter('');
+    };
 
     const handleViewHistory = (userId: string | number) => {
         setSelectedUserIdForHistory(userId);
@@ -95,141 +109,249 @@ const UserManagementPage = () => {
     };
 
     const handleDelete = async (id: string | number) => {
-        if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
-            try {
-                const token = sessionStorage.getItem('accessToken');
+        if (!window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) return;
 
-                const response = await fetch(`${API_URL}/api/users/${id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    fetchUsers();
-                } else {
-                    const errorData = await response.json().catch(() => ({}));
-                    alert(`Xóa thất bại: ${errorData.message || 'Lỗi từ phía server'}`);
+        try {
+            const token = sessionStorage.getItem('accessToken');
+            const response = await fetch(`${API_URL}/api/users/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
                 }
-            } catch (error) {
-                console.error("Lỗi xóa người dùng:", error);
-                alert("Lỗi kết nối đến server!");
+            });
+
+            if (response.ok) {
+                fetchUsers();
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                alert(`Xóa thất bại: ${errorData.message || 'Lỗi từ phía server'}`);
             }
+        } catch (error) {
+            console.error("Lỗi xóa người dùng:", error);
+            alert("Lỗi kết nối đến server!");
         }
     };
 
-    const filteredUsers = users.filter(user =>
-        user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredUsers = users.filter(user => {
+        const matchSearch =
+            user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (user.phone || '').includes(searchTerm);
+
+        const matchRole = !roleFilter || user.role.toLowerCase() === roleFilter;
+        const matchStatus =
+            !statusFilter ||
+            (statusFilter === 'active' && user.isActive) ||
+            (statusFilter === 'locked' && !user.isActive);
+
+        return matchSearch && matchRole && matchStatus;
+    });
 
     return (
-        <div className="p-6 max-w-7xl mx-auto bg-white rounded-xl shadow-md space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-800">Quản lý người dùng</h2>
+        <div className="p-6 max-w-7xl mx-auto space-y-5">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-gray-900">Quản lý người dùng</h2>
+                        <span className="px-2.5 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                            {filteredUsers.length} tài khoản
+                        </span>
+                    </div>
 
-                <div className="flex space-x-4">
-                    <input
-                        type="text"
-                        placeholder="Tìm theo họ tên, email..."
-                        className="border border-gray-300 rounded-lg px-4 py-2 w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition shadow-sm flex items-center"
-                    >
-                        <span className="mr-2 font-bold">+</span> Thêm mới
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <input
+                            type="text"
+                            placeholder="Tìm họ tên, email, SĐT..."
+                            className="border border-gray-300 rounded-lg px-3.5 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+
+                        <button
+                            onClick={() => setShowFilters(prev => !prev)}
+                            className={`px-3.5 py-2 rounded-lg text-sm font-medium border transition inline-flex items-center gap-1.5 ${
+                                showFilters || hasActiveFilters
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                        >
+                            <span>Bộ lọc</span>
+                            {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+                        </button>
+
+                        <button
+                            onClick={() => fetchUsers()}
+                            className="bg-white text-gray-700 border border-gray-300 px-3.5 py-2 rounded-lg text-sm hover:bg-gray-50 transition font-medium"
+                        >
+                            Tải lại
+                        </button>
+
+                        <button
+                            onClick={() => setIsAddModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm inline-flex items-center gap-1.5"
+                        >
+                            <span className="font-bold">+</span>
+                            <span>Thêm mới</span>
+                        </button>
+                    </div>
                 </div>
+
+                {showFilters && (
+                    <div className="pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-sm">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-gray-500 font-medium text-xs">Phân quyền</label>
+                            <select
+                                value={roleFilter}
+                                onChange={(e) => setRoleFilter(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Tất cả quyền</option>
+                                <option value="admin">Admin</option>
+                                <option value="user">User</option>
+                            </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                            <label className="text-gray-500 font-medium text-xs">Trạng thái</label>
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="active">Đang hoạt động</option>
+                                <option value="locked">Đã khóa</option>
+                            </select>
+                        </div>
+
+                        <button
+                            onClick={handleResetFilters}
+                            disabled={!hasActiveFilters && !searchTerm}
+                            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition font-medium"
+                        >
+                            Xóa bộ lọc
+                        </button>
+                    </div>
+                )}
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                    <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                        <th className="py-3 px-4 border-b w-16 text-center">STT</th>
-                        <th className="py-3 px-4 border-b">Họ và tên</th>
-                        <th className="py-3 px-4 border-b">Số điện thoại</th>
-                        <th className="py-3 px-4 border-b">Email</th>
-                        <th className="py-3 px-4 border-b">Phân quyền</th>
-                        <th className="py-3 px-4 border-b text-center">Trạng thái</th>
-                        <th className="py-3 px-4 border-b text-center">Hành động</th>
-                    </tr>
-                    </thead>
-                    <tbody className="text-gray-600 text-sm font-light">
-                    {loading ? (
-                        <tr><td colSpan={8} className="text-center py-6">Đang tải dữ liệu...</td></tr>
-                    ) : filteredUsers.length === 0 ? (
-                        <tr><td colSpan={8} className="text-center py-6">Không tìm thấy người dùng</td></tr>
-                    ) : (
-                        filteredUsers.map((user, index) => (
-                            <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
-                                <td className="py-3 px-4 text-center">{index + 1}</td>
-                                <td className="py-3 px-4 font-medium text-gray-900">{user.fullName}</td>
-                                <td className="py-3 px-4 text-gray-700">{user.phone}</td>
-                                <td className="py-3 px-4 text-gray-700">{user.email}</td>
-
-                                <td className="py-3 px-4">
-                                    <span className={`px-2 py-1 rounded text-xs font-semibold ${user.role === 'Admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
-                                      {user.role}
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    {user.isActive? (
-                                        <span className="bg-green-100 text-green-700 py-1 px-3 rounded-full text-xs font-semibold">Đang hoạt động</span>
-                                    ) : (
-                                        <span className="bg-red-100 text-red-700 py-1 px-3 rounded-full text-xs font-semibold">Đã khóa</span>
-                                    )}
-                                </td>
-
-                                <td className="py-3 px-4 text-center">
-                                    <div className="flex justify-center items-center space-x-2">
-                                        <button
-                                            onClick={() => handleViewHistory(user.id)}
-                                            className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white rounded transition tooltip"
-                                            title="Xem lịch sử chi tiết"
-                                        >
-                                            ⏱️
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditInfo(user)}
-                                            className="p-1.5 bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white rounded transition"
-                                            title="Sửa thông tin"
-                                        >
-                                            ✏️
-                                        </button>
-                                        <button
-                                            onClick={() => handleToggleStatus(user.id, user.isActive)}
-                                            className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-500 hover:text-white rounded transition"
-                                            title="Chỉnh sửa trạng thái"
-                                        >
-                                            🔒
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(user.id)}
-                                            className="p-1.5 bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded transition"
-                                            title="Xóa người dùng"
-                                        >
-                                            ❌
-                                        </button>
-                                    </div>
-                                </td>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500 uppercase text-xs font-semibold tracking-wider">
+                                <th className="py-3.5 px-4 w-12 text-center">STT</th>
+                                <th className="py-3.5 px-4">Người dùng</th>
+                                <th className="py-3.5 px-4 whitespace-nowrap">Số điện thoại</th>
+                                <th className="py-3.5 px-4 text-center">Phân quyền</th>
+                                <th className="py-3.5 px-4 text-center">Trạng thái</th>
+                                <th className="py-3.5 px-4 text-right">Hành động</th>
                             </tr>
-                        ))
-                    )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-sm">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={6} className="text-center py-12 text-gray-500">
+                                        Đang tải dữ liệu...
+                                    </td>
+                                </tr>
+                            ) : filteredUsers.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="text-center py-12 text-gray-500">
+                                        Không tìm thấy người dùng nào phù hợp.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredUsers.map((user, index) => {
+                                    const isAdmin = user.role?.toLowerCase() === 'admin';
+                                    return (
+                                        <tr key={user.id} className="hover:bg-gray-50/70 transition">
+                                            <td className="py-3.5 px-4 text-center text-gray-500 font-medium">
+                                                {index + 1}
+                                            </td>
+
+                                            {/* Gom Họ tên & Email vào 1 ô cho gọn */}
+                                            <td className="py-3.5 px-4">
+                                                <div className="font-semibold text-gray-900">{user.fullName}</div>
+                                                <div className="text-xs text-gray-500 mt-0.5">{user.email}</div>
+                                            </td>
+
+                                            <td className="py-3.5 px-4 text-gray-600 whitespace-nowrap text-xs">
+                                                {user.phone || '—'}
+                                            </td>
+
+                                            <td className="py-3.5 px-4 text-center">
+                                                <span
+                                                    className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                                                        isAdmin
+                                                            ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                                            : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                                    }`}
+                                                >
+                                                    {user.role}
+                                                </span>
+                                            </td>
+
+                                            <td className="py-3.5 px-4 text-center">
+                                                {user.isActive ? (
+                                                    <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2.5 rounded-full text-xs font-medium">
+                                                        Đang hoạt động
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-block bg-red-50 text-red-700 border border-red-100 py-0.5 px-2.5 rounded-full text-xs font-medium">
+                                                        Đã khóa
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td className="py-3.5 px-4">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <button
+                                                        onClick={() => handleViewHistory(user.id)}
+                                                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
+                                                    >
+                                                        Lịch sử
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleEditInfo(user)}
+                                                        className="px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 hover:bg-blue-50 border border-blue-200 transition"
+                                                    >
+                                                        Sửa
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleToggleStatus(user.id, user.isActive)}
+                                                        className="px-2.5 py-1 rounded-md text-xs font-medium text-amber-700 hover:bg-amber-50 border border-amber-200 transition"
+                                                    >
+                                                        {user.isActive ? 'Khóa' : 'Mở khóa'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(user.id)}
+                                                        className="px-2.5 py-1 rounded-md text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 transition"
+                                                    >
+                                                        Xóa
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="flex justify-between items-center px-5 py-3.5 border-t border-gray-200 bg-gray-50/50 text-sm text-gray-500">
+                    <div>
+                        Hiển thị <span className="font-semibold text-gray-700">{filteredUsers.length}</span> /{' '}
+                        <span className="font-semibold text-gray-700">{users.length}</span> tài khoản
+                    </div>
+                </div>
             </div>
 
             {isAddModalOpen && (
                 <AddUserModal
                     onClose={() => setIsAddModalOpen(false)}
-                    onSuccess={() => {
-                        fetchUsers();
-                    }}
+                    onSuccess={() => fetchUsers()}
                 />
             )}
 
@@ -244,9 +366,7 @@ const UserManagementPage = () => {
                 <EditUserModal
                     userData={selectedEditUser}
                     onClose={() => setIsEditModalOpen(false)}
-                    onSuccess={() => {
-                        fetchUsers();
-                    }}
+                    onSuccess={() => fetchUsers()}
                 />
             )}
         </div>

@@ -10,7 +10,7 @@ import * as crypto from "crypto";
 import { RegisterDto } from "./dto/register.dto";
 import { Role } from "commons/decorators/roles.decorator";
 
-const ACCESS_TTL = "15m";
+const ACCESS_TTL = "20m";
 const REFRESH_TTL = "7d";
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 

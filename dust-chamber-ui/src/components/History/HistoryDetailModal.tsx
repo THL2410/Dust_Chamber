@@ -19,16 +19,24 @@ export interface DetailResponse {
     fractions?: FractionData[];
 }
 
-/** null/undefined -> "Không có số liệu" (không hiển thị thành 0) */
 const fixedOrNoData = (value: string | number | null | undefined, digits: number, suffix = '') =>
     value === null || value === undefined
         ? <span className="text-xs italic text-gray-400">{NO_DATA}</span>
         : `${Number(value).toFixed(digits)}${suffix}`;
 
+const formatNumber = (val: number | string | boolean) =>
+    typeof val === 'number' ? Number(val).toLocaleString('vi-VN', { maximumFractionDigits: 4 }) : String(val);
+
 // ==========================================
 // 1. COMPONENT: THÔNG SỐ ĐẦU VÀO
 // ==========================================
-const InputSection = ({ data }: { data?: Record<string, number | string | null> }) => {
+const InputSection = ({
+    data,
+    isExporting,
+}: {
+    data?: Record<string, number | string | null>;
+    isExporting?: boolean;
+}) => {
     if (!data) return <div className="p-4 text-center text-gray-500">Không có dữ liệu thông số đầu vào.</div>;
 
     const fields = [
@@ -37,38 +45,67 @@ const InputSection = ({ data }: { data?: Record<string, number | string | null> 
         { label: 'Nồng độ bụi vào (Cb)', value: data.dust_concentration_g_m3, unit: 'g/m³', showWhenNull: true },
         { label: 'Khối lượng riêng của bụi', value: data.dust_density_kg_m3, unit: 'kg/m³' },
         { label: 'Đường kính hạt mục tiêu (d_min)', value: data.d_min_target_um, unit: 'µm' },
-        { label: 'Chiều cao buồng', value: data.chamber_height_m, unit: 'm' },
-        { label: 'Chiều dài buồng', value: data.chamber_length_m, unit: 'm' },
-        { label: 'Chiều rộng buồng', value: data.chamber_width_m, unit: 'm' },
+        { label: 'Chiều cao buồng (H)', value: data.chamber_height_m, unit: 'm' },
+        { label: 'Chiều dài buồng (L)', value: data.chamber_length_m, unit: 'm' },
+        { label: 'Chiều rộng buồng (B)', value: data.chamber_width_m, unit: 'm' },
         { label: 'Vận tốc khí trong thiết bị', value: data.gas_velocity_m_s, unit: 'm/s' },
         { label: 'Số giờ hoạt động/ngày', value: data.operating_hours_per_day, unit: 'h' },
         { label: 'Vận tốc khí trong ống dẫn', value: data.pipe_velocity_m_s, unit: 'm/s' },
         { label: 'Đường kính ống dẫn', value: data.pipe_diameter_m, unit: 'm' },
         { label: 'Chiều dài ống dẫn', value: data.pipe_length_m, unit: 'm' },
         { label: 'Hệ số ma sát đường ống', value: data.friction_r_pa_m, unit: 'Pa/m' },
-        { label: 'Độ nhám thành ống (β)', value: data.roughness_beta, unit: '' },
-        { label: 'Tổng hệ số trở lực cục bộ', value: data.local_resistance_sum, unit: '' },
+        { label: 'Độ nhám thành ống (β)', value: data.roughness_beta, unit: '-' },
+        { label: 'Tổng hệ số trở lực cục bộ', value: data.local_resistance_sum, unit: '-' },
         { label: 'Tổn thất áp suất của thiết bị lọc bụi', value: data.chamber_pressure_drop_pa, unit: 'Pa' },
-        { label: 'Hiệu suất quạt', value: data.fan_efficiency, unit: '' },
-    ];
+        { label: 'Hiệu suất quạt', value: data.fan_efficiency, unit: '-' },
+    ].filter((f) => f.value !== undefined && (f.value !== null || 'showWhenNull' in f));
+
+    // Chế độ xuất PDF: Bảng kỹ thuật chuẩn
+    if (isExporting) {
+        return (
+            <table className="w-full border-collapse border border-gray-400 text-xs text-gray-900">
+                <thead>
+                    <tr className="bg-gray-100">
+                        <th className="border border-gray-400 py-2 px-3 w-12 text-center font-semibold">STT</th>
+                        <th className="border border-gray-400 py-2 px-3 text-left font-semibold">Thông số đầu vào</th>
+                        <th className="border border-gray-400 py-2 px-3 w-36 text-right font-semibold">Giá trị</th>
+                        <th className="border border-gray-400 py-2 px-3 w-24 text-center font-semibold">Đơn vị</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {fields.map((field, idx) => (
+                        <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
+                            <td className="border border-gray-300 py-1.5 px-3 text-center text-gray-600">{idx + 1}</td>
+                            <td className="border border-gray-300 py-1.5 px-3">{field.label}</td>
+                            <td className="border border-gray-300 py-1.5 px-3 text-right font-medium tabular-nums">
+                                {field.value === null ? (
+                                    <span className="italic text-gray-400 font-normal">{NO_DATA}</span>
+                                ) : (
+                                    formatNumber(field.value)
+                                )}
+                            </td>
+                            <td className="border border-gray-300 py-1.5 px-3 text-center text-gray-600">{field.unit}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        );
+    }
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {fields.map((field, idx) => (
-                // Đầu vào không nhập (d_min, kích thước, đường kính ống...) thì ẩn; riêng Cb báo "Không có số liệu"
-                field.value !== undefined && (field.value !== null || 'showWhenNull' in field) && (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <span className="text-gray-600 font-medium text-sm">{field.label}</span>
-                        {field.value === null ? (
-                            <span className="text-sm italic text-gray-400">{NO_DATA}</span>
-                        ) : (
-                            <span className="text-gray-900 font-semibold">
-                                {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
-                                <span className="text-xs text-gray-500 ml-1">{field.unit}</span>
-                            </span>
-                        )}
-                    </div>
-                )
+                <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <span className="text-gray-600 font-medium text-sm">{field.label}</span>
+                    {field.value === null ? (
+                        <span className="text-sm italic text-gray-400">{NO_DATA}</span>
+                    ) : (
+                        <span className="text-gray-900 font-semibold">
+                            {formatNumber(field.value)}
+                            {field.unit !== '-' && <span className="text-xs text-gray-500 ml-1">{field.unit}</span>}
+                        </span>
+                    )}
+                </div>
             ))}
         </div>
     );
@@ -77,14 +114,20 @@ const InputSection = ({ data }: { data?: Record<string, number | string | null> 
 // ==========================================
 // 2. COMPONENT: KẾT QUẢ TÍNH TOÁN
 // ==========================================
-const ResultSection = ({ data }: { data?: Record<string, number | string | boolean | null> }) => {
+const ResultSection = ({
+    data,
+    isExporting,
+}: {
+    data?: Record<string, number | string | boolean | null>;
+    isExporting?: boolean;
+}) => {
     if (!data) return <div className="p-4 text-center text-gray-500">Không có dữ liệu kết quả.</div>;
 
     const fields = [
-        { label: 'Hiệu suất tổng (η)', value: data.eta_total_percent, unit: '%' },
-        { label: 'Nồng độ bụi sau lọc (Cb\')', value: data.cb_out_mg_m3, unit: 'mg/m³' },
-        { label: 'Công suất quạt (N)', value: data.fan_power_kw, unit: 'kW' },
-        { label: 'Tổn thất áp suất toàn hệ thống', value: data.dp_system_pa, unit: 'Pa' },
+        { label: 'Hiệu suất tổng (η)', value: data.eta_total_percent, unit: '%', highlight: true },
+        { label: "Nồng độ bụi sau lọc (Cb')", value: data.cb_out_mg_m3, unit: 'mg/m³', highlight: true },
+        { label: 'Công suất quạt (N)', value: data.fan_power_kw, unit: 'kW', highlight: true },
+        { label: 'Tổn thất áp suất toàn hệ thống', value: data.dp_system_pa, unit: 'Pa', highlight: true },
         { label: 'Chiều cao (H)', value: data.h_m, unit: 'm' },
         { label: 'Chiều dài (L)', value: data.l_m, unit: 'm' },
         { label: 'Chiều rộng (B)', value: data.b_m, unit: 'm' },
@@ -98,7 +141,7 @@ const ResultSection = ({ data }: { data?: Record<string, number | string | boole
         { label: 'Diện tích đáy buồng (B × L)', value: data.bl_m2, unit: 'm²' },
         { label: 'Đường kính hạt tối thiểu (d_min_calc)', value: data.d_min_calc_um, unit: 'µm' },
         { label: 'Đường kính hạt giới hạn (d_limit)', value: data.d_limit_um, unit: 'µm' },
-        { label: 'Kết quả giữ lại hạt', value: data.is_retained ? 'Có' : 'Không', unit: '' },
+        { label: 'Kết quả giữ lại hạt', value: data.is_retained ? 'Đạt (Có)' : 'Không đạt', unit: '-' },
         { label: 'Lưu lượng khối lượng khí vào (Gv)', value: data.gv_kg_h, unit: 'kg/h' },
         { label: '% bụi theo khối lượng trong khí vào (yv)', value: data.yv_percent, unit: '%' },
         { label: 'Lưu lượng khối lượng khí sạch ra (Gs)', value: data.gs_kg_h, unit: 'kg/h' },
@@ -111,30 +154,58 @@ const ResultSection = ({ data }: { data?: Record<string, number | string | boole
         { label: 'Bụi còn lại trong khí ra (Mr)', value: data.mr_kg_h, unit: 'kg/h' },
         { label: 'Đường kính ống (Φ0)', value: data.d0_m, unit: 'm' },
         { label: 'Vận tốc ống hút (Vt)', value: data.vt_m_s, unit: 'm/s' },
-        { label: 'Hệ số (α)', value: data.alpha, unit: '' },
+        { label: 'Hệ số (α)', value: data.alpha, unit: '-' },
         { label: 'Tổn thất áp suất ma sát', value: data.dp_friction_pa, unit: 'Pa' },
         { label: 'Áp suất động (Pđ)', value: data.p_dynamic_pa, unit: 'Pa' },
         { label: 'Tổn thất áp suất cục bộ', value: data.p_local_pa, unit: 'Pa' },
         { label: 'Tổn thất áp suất trong ống', value: data.dp_pipe_pa, unit: 'Pa' },
-    ];
+    ].filter((f) => f.value !== undefined);
+
+    if (isExporting) {
+        return (
+            <table className="w-full border-collapse border border-gray-400 text-xs text-gray-900">
+                <thead>
+                    <tr className="bg-gray-100">
+                        <th className="border border-gray-400 py-2 px-3 w-12 text-center font-semibold">STT</th>
+                        <th className="border border-gray-400 py-2 px-3 text-left font-semibold">Đại lượng tính toán</th>
+                        <th className="border border-gray-400 py-2 px-3 w-36 text-right font-semibold">Kết quả</th>
+                        <th className="border border-gray-400 py-2 px-3 w-24 text-center font-semibold">Đơn vị</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {fields.map((field, idx) => (
+                        <tr key={idx} className={field.highlight ? 'bg-gray-100/70 font-semibold' : idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
+                            <td className="border border-gray-300 py-1.5 px-3 text-center text-gray-600 font-normal">{idx + 1}</td>
+                            <td className="border border-gray-300 py-1.5 px-3">{field.label}</td>
+                            <td className="border border-gray-300 py-1.5 px-3 text-right tabular-nums">
+                                {field.value === null ? (
+                                    <span className="italic text-gray-400 font-normal">{NO_DATA}</span>
+                                ) : (
+                                    formatNumber(field.value)
+                                )}
+                            </td>
+                            <td className="border border-gray-300 py-1.5 px-3 text-center text-gray-600 font-normal">{field.unit}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        );
+    }
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {fields.map((field, idx) => (
-                // null = không có số liệu (thiếu Cb hoặc phân bố hạt): vẫn hiện dòng để người xem biết
-                field.value !== undefined && (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-green-50 rounded-lg border border-green-100">
-                        <span className="text-gray-700 font-medium text-sm">{field.label}</span>
-                        {field.value === null ? (
-                            <span className="text-sm italic text-gray-400">{NO_DATA}</span>
-                        ) : (
-                            <span className="text-green-700 font-bold">
-                                {typeof field.value === 'number' ? Number(field.value).toLocaleString('vi-VN') : field.value}
-                                <span className="text-xs text-green-600 ml-1">{field.unit}</span>
-                            </span>
-                        )}
-                    </div>
-                )
+                <div key={idx} className="flex justify-between items-center p-3 bg-green-50 rounded-lg border border-green-100">
+                    <span className="text-gray-700 font-medium text-sm">{field.label}</span>
+                    {field.value === null ? (
+                        <span className="text-sm italic text-gray-400">{NO_DATA}</span>
+                    ) : (
+                        <span className="text-green-700 font-bold">
+                            {formatNumber(field.value)}
+                            {field.unit !== '-' && <span className="text-xs text-green-600 ml-1">{field.unit}</span>}
+                        </span>
+                    )}
+                </div>
             ))}
         </div>
     );
@@ -143,12 +214,26 @@ const ResultSection = ({ data }: { data?: Record<string, number | string | boole
 // ==========================================
 // 3. COMPONENT: KẾT QUẢ DẢI BỤI
 // ==========================================
-const FractionSection = ({ fractions }: { fractions?: FractionData[] }) => {
+const FractionSection = ({
+    fractions,
+    isExporting,
+}: {
+    fractions?: FractionData[];
+    isExporting?: boolean;
+}) => {
     if (!fractions || fractions.length === 0) {
         return <div className="p-4 text-center text-gray-500">Không có dữ liệu dải bụi.</div>;
     }
 
     const translateRegime = (regime?: string | number | null) => {
+        if (isExporting) {
+            switch (String(regime)) {
+                case 'FULL': return 'Hoàn toàn';
+                case 'PARTIAL': return 'Một phần';
+                case 'OTHER_DEVICE': return 'Cần TB khác';
+                default: return regime || '-';
+            }
+        }
         switch (String(regime)) {
             case 'FULL': return <span className="text-green-600 font-semibold">Hoàn toàn</span>;
             case 'PARTIAL': return <span className="text-yellow-600 font-semibold">Một phần</span>;
@@ -157,42 +242,81 @@ const FractionSection = ({ fractions }: { fractions?: FractionData[] }) => {
         }
     };
 
+    if (isExporting) {
+        return (
+            <table className="w-full border-collapse border border-gray-400 text-xs text-gray-900">
+                <thead>
+                    <tr className="bg-gray-100">
+                        <th className="border border-gray-400 py-2 px-2 text-center font-semibold">Cỡ hạt (µm)</th>
+                        <th className="border border-gray-400 py-2 px-2 text-right font-semibold">% KL</th>
+                        <th className="border border-gray-400 py-2 px-2 text-right font-semibold">d đ.diện (µm)</th>
+                        <th className="border border-gray-400 py-2 px-2 text-right font-semibold">v lắng (m/s)</th>
+                        <th className="border border-gray-400 py-2 px-2 text-right font-semibold">Hiệu suất (%)</th>
+                        <th className="border border-gray-400 py-2 px-2 text-right font-semibold">C vào (g/m³)</th>
+                        <th className="border border-gray-400 py-2 px-2 text-right font-semibold">C ra (g/m³)</th>
+                        <th className="border border-gray-400 py-2 px-2 text-center font-semibold">Chế độ</th>
+                        <th className="border border-gray-400 py-2 px-2 text-left font-semibold">TB đề xuất</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {fractions.map((f, index) => (
+                        <tr key={index} className={index % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
+                            <td className="border border-gray-300 py-1.5 px-2 text-center font-medium tabular-nums">
+                                {f.d_from_um} – {f.d_to_um ?? '∞'}
+                            </td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-right tabular-nums">{Number(f.mass_percent).toFixed(2)}%</td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-right tabular-nums">{fixedOrNoData(f.result?.d_rep_um, 2)}</td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-right tabular-nums">{fixedOrNoData(f.result?.settling_velocity_m_s, 4)}</td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-right font-semibold tabular-nums">{fixedOrNoData(f.result?.efficiency_percent, 2, '%')}</td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-right tabular-nums">{fixedOrNoData(f.result?.inlet_conc_g_m3, 4)}</td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-right tabular-nums">{fixedOrNoData(f.result?.outlet_conc_g_m3, 4)}</td>
+                            <td className="border border-gray-300 py-1.5 px-2 text-center">{translateRegime(f.result?.regime)}</td>
+                            <td className="border border-gray-300 py-1.5 px-2">
+                                {f.collectors && f.collectors.length > 0 ? f.collectors.map((c) => c.name).join(', ') : '-'}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        );
+    }
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
-                <tr className="bg-amber-100 text-amber-800 text-xs uppercase tracking-wider">
-                    <th className="py-3 px-4 border-b">Kích thước hạt (µm)</th>
-                    <th className="py-3 px-4 border-b">% Khối lượng</th>
-                    <th className="py-3 px-4 border-b">d đại diện (µm)</th>
-                    <th className="py-3 px-4 border-b">Tốc độ lắng (m/s)</th>
-                    <th className="py-3 px-4 border-b">Hiệu suất (%)</th>
-                    <th className="py-3 px-4 border-b">C bụi vào (g/m³)</th>
-                    <th className="py-3 px-4 border-b">C bụi ra (g/m³)</th>
-                    <th className="py-3 px-4 border-b text-center">Chế độ</th>
-                    <th className="py-3 px-4 border-b">TB Đề xuất</th>
-                </tr>
+                    <tr className="bg-amber-100 text-amber-800 text-xs uppercase tracking-wider">
+                        <th className="py-3 px-4 border-b">Kích thước hạt (µm)</th>
+                        <th className="py-3 px-4 border-b">% Khối lượng</th>
+                        <th className="py-3 px-4 border-b">d đại diện (µm)</th>
+                        <th className="py-3 px-4 border-b">Tốc độ lắng (m/s)</th>
+                        <th className="py-3 px-4 border-b">Hiệu suất (%)</th>
+                        <th className="py-3 px-4 border-b">C bụi vào (g/m³)</th>
+                        <th className="py-3 px-4 border-b">C bụi ra (g/m³)</th>
+                        <th className="py-3 px-4 border-b text-center">Chế độ</th>
+                        <th className="py-3 px-4 border-b">TB Đề xuất</th>
+                    </tr>
                 </thead>
                 <tbody className="text-sm">
-                {fractions.map((f, index) => (
-                    <tr key={index} className="border-b border-gray-200 hover:bg-amber-50/50">
-                        <td className="py-3 px-4 font-medium text-gray-800">
-                            {f.d_from_um} - {f.d_to_um ?? '∞'}
-                        </td>
-                        <td className="py-3 px-4">{Number(f.mass_percent).toFixed(2)}%</td>
-                        <td className="py-3 px-4">{fixedOrNoData(f.result?.d_rep_um, 2)}</td>
-                        <td className="py-3 px-4">{fixedOrNoData(f.result?.settling_velocity_m_s, 4)}</td>
-                        <td className="py-3 px-4 font-semibold text-green-600">{fixedOrNoData(f.result?.efficiency_percent, 2, '%')}</td>
-                        <td className="py-3 px-4">{fixedOrNoData(f.result?.inlet_conc_g_m3, 4)}</td>
-                        <td className="py-3 px-4">{fixedOrNoData(f.result?.outlet_conc_g_m3, 4)}</td>
-                        <td className="py-3 px-4 text-center">{translateRegime(f.result?.regime)}</td>
-                        <td className="py-3 px-4 text-xs">
-                            {f.collectors && f.collectors.length > 0
-                                ? f.collectors.map(c => c.name).join(', ')
-                                : '-'}
-                        </td>
-                    </tr>
-                ))}
+                    {fractions.map((f, index) => (
+                        <tr key={index} className="border-b border-gray-200 hover:bg-amber-50/50">
+                            <td className="py-3 px-4 font-medium text-gray-800">
+                                {f.d_from_um} – {f.d_to_um ?? '∞'}
+                            </td>
+                            <td className="py-3 px-4">{Number(f.mass_percent).toFixed(2)}%</td>
+                            <td className="py-3 px-4">{fixedOrNoData(f.result?.d_rep_um, 2)}</td>
+                            <td className="py-3 px-4">{fixedOrNoData(f.result?.settling_velocity_m_s, 4)}</td>
+                            <td className="py-3 px-4 font-semibold text-green-600">{fixedOrNoData(f.result?.efficiency_percent, 2, '%')}</td>
+                            <td className="py-3 px-4">{fixedOrNoData(f.result?.inlet_conc_g_m3, 4)}</td>
+                            <td className="py-3 px-4">{fixedOrNoData(f.result?.outlet_conc_g_m3, 4)}</td>
+                            <td className="py-3 px-4 text-center">{translateRegime(f.result?.regime)}</td>
+                            <td className="py-3 px-4 text-xs">
+                                {f.collectors && f.collectors.length > 0
+                                    ? f.collectors.map((c) => c.name).join(', ')
+                                    : '-'}
+                            </td>
+                        </tr>
+                    ))}
                 </tbody>
             </table>
         </div>
@@ -219,9 +343,9 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
             try {
                 const token = sessionStorage.getItem('accessToken');
                 const response = await fetch(`${API_URL}/api/history/${id}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 });
-                if (!response.ok) throw new Error("Lỗi tải chi tiết");
+                if (!response.ok) throw new Error('Lỗi tải chi tiết');
 
                 const result = await response.json();
                 setData(result);
@@ -248,8 +372,7 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
                         style: {
                             background: '#ffffff',
                             margin: '0',
-                            padding: '20px'
-                        }
+                        },
                     });
 
                     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -273,26 +396,40 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
                         heightLeft -= pageHeight;
                     }
 
-                    let tabName = '';
-                    if (activeTab === 'input') tabName = 'Thong_So_Dau_Vao';
-                    if (activeTab === 'result') tabName = 'Ket_Qua_Tinh_Toan';
-                    if (activeTab === 'fraction') tabName = 'Ket_Qua_Dai_Bui';
+                    const tabNames: Record<string, string> = {
+                        input: 'Thong_So_Dau_Vao',
+                        result: 'Ket_Qua_Tinh_Toan',
+                        fraction: 'Ket_Qua_Dai_Bui',
+                    };
 
-                    pdf.save(`Du_An_${id}_${tabName}.pdf`);
+                    pdf.save(`Bao_Cao_Du_An_${id}_${tabNames[activeTab]}.pdf`);
                 } catch (error) {
                     console.error('Lỗi khi tạo PDF:', error);
                     alert('Lỗi xuất PDF. Vui lòng thử lại sau.');
                 }
             }
             setIsExporting(false);
-        }, 500);
+        }, 400);
     };
 
     if (!id) return null;
 
+    const exportDateStr = new Date().toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+
+    const reportTitles: Record<string, string> = {
+        input: 'BẢNG THÔNG SỐ ĐẦU VÀO',
+        result: 'BẢNG KẾT QUẢ TÍNH TOÁN',
+        fraction: 'BẢNG PHÂN BỐ VÀ HIỆU SUẤT THEO DẢI BỤI',
+    };
+
     return (
         <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity ${isExporting ? 'overflow-y-auto items-start py-10' : ''}`}>
-
             <div className={`bg-white rounded-xl shadow-2xl w-11/12 max-w-5xl flex flex-col transition-all ${isExporting ? 'h-auto' : 'h-[85vh] overflow-hidden animate-fade-in-up'}`}>
 
                 {!isExporting && (
@@ -357,23 +494,32 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
                     </div>
                 )}
 
-                <div id="pdf-content" className={`bg-white ${isExporting ? 'h-auto pb-10 select-none' : 'flex-1 overflow-y-auto'}`}>
-
+                <div id="pdf-content" className={`bg-white box-border ${isExporting ? 'h-auto p-8 select-none' : 'flex-1 overflow-y-auto'}`}>
                     {isExporting && data && (
-                        <div className="px-8 py-6 mb-4 border-b-4 border-blue-600 bg-white text-center">
-                            <h2 className="text-3xl font-bold text-gray-800 uppercase tracking-wide">
-                                {activeTab === 'input' && 'BÁO CÁO THÔNG SỐ ĐẦU VÀO'}
-                                {activeTab === 'result' && 'BÁO CÁO KẾT QUẢ TÍNH TOÁN'}
-                                {activeTab === 'fraction' && 'BÁO CÁO KẾT QUẢ TỪNG DẢI BỤI'}
-                            </h2>
-                            <p className="text-lg text-blue-700 font-semibold mt-2">
-                                Tên dự án: {data.project?.name}
-                            </p>
-                            <p className="text-gray-500 mt-1">Mã tham chiếu: #{id} | Chế độ: {data.project?.mode}</p>
+                        <div className="mb-5 pb-3 border-b-2 border-gray-800">
+                            <div className="flex justify-between items-start gap-4">
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-widest text-gray-500 font-semibold">
+                                        Báo cáo tính toán buồng lắng bụi
+                                    </p>
+                                    <h2 className="text-xl font-bold text-gray-900 mt-1">
+                                        {reportTitles[activeTab]}
+                                    </h2>
+                                </div>
+                                <div className="text-right text-xs text-gray-600 space-y-0.5 shrink-0">
+                                    <div>Mã phương án: <span className="font-semibold text-gray-900">#{id}</span></div>
+                                    <div>Chế độ: <span className="font-semibold text-gray-900">{data.project?.mode}</span></div>
+                                    <div>Ngày xuất: {exportDateStr}</div>
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-2 border-t border-gray-200 text-sm text-gray-800">
+                                <span className="text-gray-500">Tên dự án: </span>
+                                <span className="font-semibold">{data.project?.name}</span>
+                            </div>
                         </div>
                     )}
 
-                    <div className="p-6">
+                    <div className={isExporting ? '' : 'p-6'}>
                         {loading ? (
                             <div className="flex justify-center items-center h-full">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -382,31 +528,20 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
                         ) : !data ? (
                             <div className="text-center text-red-500 mt-10">Không tìm thấy dữ liệu cho dự án này.</div>
                         ) : (
-                            <div className={`space-y-8 ${isExporting ? 'px-4' : ''}`}>
-
-                                {activeTab === 'input' && (
-                                    <div className="break-inside-avoid">
-                                        {isExporting && <h4 className="text-xl font-bold mb-4 text-indigo-700 border-b-2 border-indigo-100 pb-2">THÔNG SỐ ĐẦU VÀO</h4>}
-                                        <InputSection data={data.input} />
-                                    </div>
-                                )}
-
-                                {activeTab === 'result' && (
-                                    <div className="break-inside-avoid">
-                                        {isExporting && <h4 className="text-xl font-bold mb-4 text-emerald-700 border-b-2 border-emerald-100 pb-2">KẾT QUẢ TÍNH TOÁN</h4>}
-                                        <ResultSection data={data.result} />
-                                    </div>
-                                )}
-
-                                {activeTab === 'fraction' && (
-                                    <div className="break-inside-avoid">
-                                        {isExporting && <h4 className="text-xl font-bold mb-4 text-amber-700 border-b-2 border-amber-100 pb-2">KẾT QUẢ TỪNG DẢI BỤI</h4>}
-                                        <FractionSection fractions={data.fractions} />
-                                    </div>
-                                )}
+                            <div>
+                                {activeTab === 'input' && <InputSection data={data.input} isExporting={isExporting} />}
+                                {activeTab === 'result' && <ResultSection data={data.result} isExporting={isExporting} />}
+                                {activeTab === 'fraction' && <FractionSection fractions={data.fractions} isExporting={isExporting} />}
                             </div>
                         )}
                     </div>
+
+                    {isExporting && data && (
+                        <div className="mt-6 pt-3 border-t border-gray-300 flex justify-between text-[11px] text-gray-500">
+                            <span>Dự án: {data.project?.name} (#{id})</span>
+                            <span>Xuất lúc {exportDateStr}</span>
+                        </div>
+                    )}
                 </div>
 
                 {!isExporting && (
@@ -419,7 +554,6 @@ const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({ id, initialTab 
                         </button>
                     </div>
                 )}
-
             </div>
         </div>
     );

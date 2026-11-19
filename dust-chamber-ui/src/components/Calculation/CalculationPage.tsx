@@ -572,8 +572,8 @@ export default function CalculationPage() {
                             </p>
                             <p className={`rounded-lg px-4 py-3 text-sm font-medium ${result.result.isRetained ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900'}`}>
                                 {result.result.isRetained
-                                    ? `Đạt: buồng giữ lại hoàn toàn hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên (chọn d_min = ${fmt(result.result.dLimitUm, 0)} µm).`
-                                    : `Chưa đạt: buồng chỉ giữ được hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên.`}
+                                    ? `Đạt yêu cầu: buồng giữ lại hoàn toàn hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên (chọn d_min = ${fmt(result.result.dLimitUm, 0)} µm).`
+                                    : `Chưa đạt yêu cầu: buồng chỉ giữ được hạt từ ${fmt(result.result.dMinCalcUm, 1)} µm trở lên.`}
                             </p>
                             <button
                                 type="button"

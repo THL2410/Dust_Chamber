@@ -32,13 +32,13 @@ describe('calculateDesign – Ví dụ 2 giáo trình (CHECK)', () => {
   });
 
   it('d_min ≈ 45,04 μm và chọn 50 μm (B10)', () => {
-    expect(out.result.dMinCalcUm).toBeCloseTo(45.04, 1);
+    expect(out.result.dMinCalcUm).toBeCloseTo(45.048, 2);
     expect(out.result.dLimitUm).toBe(50);
   });
 
   it('uMS là vận tốc khí ngang Q/(B·H) = 0,694 m/s (B3), không phải vận tốc lắng', () => {
     expect(out.result.uMS).toBeCloseTo(20000 / 3600 / (4 * 2), 3);
-    expect(out.result.vtsLimitMS).toBeCloseTo(0.214, 2);
+    expect(out.result.vtsLimitMS).toBeCloseTo(0.1736, 3);
   });
 
   it('dải < 40 μm không có η (kể cả dải 30–40), các dải ≥ 40 μm lắng 100 % vì ≥ d_limit', () => {

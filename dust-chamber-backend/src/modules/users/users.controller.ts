@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Req,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
@@ -90,7 +91,7 @@ export class UsersController {
   @Delete(":id")
   @Roles("admin")
   @ApiOperation({ summary: "Xóa vĩnh viễn người dùng theo ID" })
-  hardRemove(@Param("id", ParseIntPipe) id: number) {
-    return this.usersService.hardRemove(id);
+  hardRemove(@Param("id", ParseIntPipe) id: number, @Req() req: any) {
+    return this.usersService.hardRemove(id, req.user);
   }
 }

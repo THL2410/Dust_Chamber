@@ -5,6 +5,7 @@ import { API_URL } from '../../config';
 const LoginPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -43,7 +44,7 @@ const LoginPage = () => {
 
             sessionStorage.setItem('accessToken', token);
 
-            if (role === 'Admin') {
+            if (role.toLowerCase() === 'admin') {
                 navigate('/users');
             } else {
                 navigate('/history');
@@ -90,14 +91,24 @@ const LoginPage = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Mật khẩu
                         </label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                            placeholder="••••••••"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                                placeholder="••••••••"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-blue-600 hover:text-blue-800"
+                                tabIndex={-1}
+                            >
+                                {showPassword ? 'Ẩn' : 'Hiện'}
+                            </button>
+                        </div>
                     </div>
 
                     <button

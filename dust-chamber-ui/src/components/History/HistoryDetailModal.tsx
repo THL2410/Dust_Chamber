@@ -60,7 +60,6 @@ const InputSection = ({
         { label: 'Hiệu suất quạt', value: data.fan_efficiency, unit: '-' },
     ].filter((f) => f.value !== undefined && (f.value !== null || 'showWhenNull' in f));
 
-    // Chế độ xuất PDF: Bảng kỹ thuật chuẩn
     if (isExporting) {
         return (
             <table className="w-full border-collapse border border-gray-400 text-xs text-gray-900">
@@ -131,7 +130,7 @@ const ResultSection = ({
         { label: 'Chiều cao (H)', value: data.h_m, unit: 'm' },
         { label: 'Chiều dài (L)', value: data.l_m, unit: 'm' },
         { label: 'Chiều rộng (B)', value: data.b_m, unit: 'm' },
-        { label: 'Độ nhớt động lực học (μ)', value: data.mu_pa_s, unit: 'Pa.s' },
+        { label: 'Độ nhớt động lực học (μ)', value: data.mu_pa_s != null ? Number(data.mu_pa_s) * 1e6 : null, unit: '× 10⁻⁶ Pa.s' },
         { label: 'Khối lượng riêng của khí', value: data.rho_gas_kg_m3, unit: 'kg/m³' },
         { label: 'Vận tốc khí ngang trong buồng (u)', value: data.u_m_s, unit: 'm/s' },
         { label: 'Vận tốc lắng của hạt d_limit', value: data.settling_velocity_limit_m_s, unit: 'm/s' },
@@ -139,7 +138,7 @@ const ResultSection = ({
         { label: 'Thời gian lưu trong buồng (τ2)', value: data.tau2_s, unit: 's' },
         { label: 'Chiều dài tối thiểu (L_min)', value: data.l_min_m, unit: 'm' },
         { label: 'Diện tích đáy buồng (B × L)', value: data.bl_m2, unit: 'm²' },
-        { label: 'Đường kính hạt tối thiểu (d_min_calc)', value: data.d_min_calc_um, unit: 'µm' },
+        { label: 'Đường kính hạt tối thiểu (d_min)', value: data.d_min_calc_um, unit: 'µm' },
         { label: 'Đường kính hạt giới hạn (d_limit)', value: data.d_limit_um, unit: 'µm' },
         { label: 'Kết quả giữ lại hạt', value: data.is_retained ? 'Đạt (Có)' : 'Không đạt', unit: '-' },
         { label: 'Lưu lượng khối lượng khí vào (Gv)', value: data.gv_kg_h, unit: 'kg/h' },

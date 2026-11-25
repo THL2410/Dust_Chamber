@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HistoryDetailModal from './HistoryDetailModal';
 import { API_URL } from '../../config';
@@ -40,7 +40,27 @@ const HistoryPage = () => {
 
     const [refreshKey, setRefreshKey] = useState(0);
 
+    const [toast, setToast] = useState<{
+        type: 'success' | 'error';
+        message: string;
+    } | null>(null);
+    const toastTimerRef = useRef<number | null>(null);
+
+    const [confirmModal, setConfirmModal] = useState<{
+        title: string;
+        message: string;
+        confirmText: string;
+        isDanger?: boolean;
+        onConfirm: () => void;
+    } | null>(null);
+
     const hasActiveFilters = Boolean(mode || fromDate || toDate || sortBy !== 'createdAt' || order !== 'DESC');
+
+    const showToast = (type: 'success' | 'error', message: string) => {
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        setToast({ type, message });
+        toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
+    };
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -54,7 +74,7 @@ const HistoryPage = () => {
     useEffect(() => {
         const fetchHistories = async () => {
             if (fromDate && toDate && fromDate > toDate) {
-                alert('Ngày bắt đầu (Từ ngày) phải nhỏ hơn hoặc bằng ngày kết thúc (Đến ngày).');
+                showToast('error', 'Ngày bắt đầu (Từ ngày) phải nhỏ hơn hoặc bằng ngày kết thúc (Đến ngày).');
                 return;
             }
 
@@ -128,27 +148,36 @@ const HistoryPage = () => {
         navigate(`/calculate?editId=${id}`);
     };
 
-    const handleDelete = async (id: number) => {
-        if (!window.confirm('Bạn có chắc chắn muốn xóa phương án này không?')) return;
+    const handleDelete = (id: number) => {
+        setConfirmModal({
+            title: 'Xác nhận xóa',
+            message: 'Bạn có chắc chắn muốn xóa phương án này không?',
+            confirmText: 'Xóa',
+            isDanger: true,
+            onConfirm: async () => {
+                setConfirmModal(null);
+                try {
+                    const token = sessionStorage.getItem('accessToken');
+                    const response = await fetch(`${API_URL}/api/history/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
 
-        try {
-            const token = sessionStorage.getItem('accessToken');
-            const response = await fetch(`${API_URL}/api/history/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
+                    if (response.ok) {
+                        showToast('success', 'Đã xóa phương án thành công!');
+                        setRefreshKey(oldKey => oldKey + 1);
+                    } else {
+                        const errorData = await response.json().catch(() => ({}));
+                        showToast('error', errorData.message || 'Có lỗi xảy ra khi xóa phương án.');
+                    }
+                } catch (error) {
+                    console.error("Lỗi khi xóa:", error);
+                    showToast('error', 'Lỗi kết nối đến máy chủ.');
                 }
-            });
-
-            if (response.ok) {
-                setRefreshKey(oldKey => oldKey + 1);
-            } else {
-                alert('Có lỗi xảy ra khi xóa phương án.');
-            }
-        } catch (error) {
-            console.error("Lỗi khi xóa:", error);
-            alert('Lỗi kết nối đến máy chủ.');
-        }
+            },
+        });
     };
 
     const formatDate = (dateString?: string) => {
@@ -401,6 +430,53 @@ const HistoryPage = () => {
                     initialTab={selectedTab}
                     onClose={() => setIsModalOpen(false)}
                 />
+            )}
+
+            {/* Modal xác nhận thay thế window.confirm */}
+            {confirmModal && (
+                <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+                    <div className="bg-white w-[400px] rounded-xl shadow-2xl p-6 space-y-4">
+                        <h3 className="text-lg font-bold text-gray-900">
+                            {confirmModal.title}
+                        </h3>
+                        <p className="text-sm text-gray-600">{confirmModal.message}</p>
+                        <div className="flex justify-end gap-2.5 pt-2">
+                            <button
+                                onClick={() => setConfirmModal(null)}
+                                className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={confirmModal.onConfirm}
+                                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition ${
+                                    confirmModal.isDanger
+                                        ? 'bg-red-600 hover:bg-red-700'
+                                        : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                            >
+                                {confirmModal.confirmText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toast thông báo nổi */}
+            {toast && (
+                <div
+                    className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium ${
+                        toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'
+                    }`}
+                >
+                    <span>{toast.message}</span>
+                    <button
+                        onClick={() => setToast(null)}
+                        className="text-white/80 hover:text-white font-bold text-base leading-none"
+                    >
+                        &times;
+                    </button>
+                </div>
             )}
         </div>
     );

@@ -82,12 +82,15 @@ export class UsersService {
   }
 
   async remove(id: number, currentUser: any) {
-    if (currentUser.role !== "admin" && currentUser.id !== id) {
-      throw new ForbiddenException("Bạn không có quyền thay đổi trạng thái tài khoản của người khác.");
+    if (currentUser.role !== 'admin' && currentUser.id !== id) {
+      throw new ForbiddenException('Bạn không có quyền thay đổi trạng thái tài khoản của người khác.');
+    }
+
+    if (currentUser.role === 'admin' && currentUser.id === id) {
+      throw new ForbiddenException('Admin không thể tự khóa tài khoản đang đăng nhập.');
     }
 
     const user = await this.findOne(id);
-
     user.isActive = !user.isActive;
 
     const updatedUser = await this.usersRepository.save(user);
@@ -95,12 +98,16 @@ export class UsersService {
     return result;
   }
 
-  async hardRemove(id: number) {
+  async hardRemove(id: number, currentUser: any) {
+    if (currentUser.id === id) {
+      throw new ForbiddenException('Không thể tự xóa vĩnh viễn tài khoản đang đăng nhập.');
+    }
+
     await this.findOne(id);
     await this.usersRepository.delete(id);
     return {
       statusCode: 200,
-      message: `Đã xóa vĩnh viễn người dùng có ID là ${id}`,
+      message: `Đã xóa thành công người dùng có ID là ${id}`,
     };
   }
 }
